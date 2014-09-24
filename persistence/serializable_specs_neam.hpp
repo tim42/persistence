@@ -26,11 +26,7 @@
 #ifndef __N_331927306113683385_1782336113__SERIALIZABLE_SPECS_HPP__
 # define __N_331927306113683385_1782336113__SERIALIZABLE_SPECS_HPP__
 
-#include <vector>
-#include <string>
-#include <map>
-#include <unordered_map>
-
+#include <type_traits>
 #include <tools/array_wrapper.hpp>
 #include "object.hpp" // for my IDE
 #include "raw_data.hpp"
@@ -39,18 +35,23 @@ namespace neam
 {
   namespace cr
   {
+    /// \brief the default serializer for the \e neam backend
     template<typename Type>
-    class persistence::serializable<const Type>
+    class persistence::serializable<persistence_backend::neam, Type, raw>
     {
+      static_assert(std::is_arithmetic<Type>::value, "only arithmetic types here !!!");
       public:
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, const Type *ptr)
+        static bool from_memory(const char *memory, size_t size, Type *ptr)
         {
-          return serializable<Type>::from_memory(memory, size, const_cast<Type *>(ptr));
+          if (size != sizeof(Type))
+            return false;
+          *ptr = *reinterpret_cast<const Type *>(memory);
+          return true;
         }
 
         /// \brief serialize the object
@@ -60,12 +61,35 @@ namespace neam
         /// \return true if successful
         static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr)
         {
-          return serializable<Type>::to_memory(mem, size, (ptr));
+          size = sizeof(Type);
+          char *memory = reinterpret_cast<char *>(mem.allocate(size));
+          if (!memory)
+            return false;
+          *reinterpret_cast<Type *>(memory) = *ptr;
+          return true;
         }
     };
 
+    // for arithmetic types
+    template<> class persistence::serializable<persistence_backend::neam, signed char> : public persistence::serializable<persistence_backend::neam, signed char, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, char> : public persistence::serializable<persistence_backend::neam, char, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, unsigned char> : public persistence::serializable<persistence_backend::neam, unsigned char, raw> {};
+
+    template<> class persistence::serializable<persistence_backend::neam, signed short> : public persistence::serializable<persistence_backend::neam, signed short, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, unsigned short> : public persistence::serializable<persistence_backend::neam, unsigned short, raw> {};
+
+    template<> class persistence::serializable<persistence_backend::neam, signed int> : public persistence::serializable<persistence_backend::neam, signed int, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, unsigned int> : public persistence::serializable<persistence_backend::neam, unsigned int, raw> {};
+
+    template<> class persistence::serializable<persistence_backend::neam, signed long> : public persistence::serializable<persistence_backend::neam, signed long, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, unsigned long> : public persistence::serializable<persistence_backend::neam, unsigned long, raw> {};
+
+    template<> class persistence::serializable<persistence_backend::neam, float> : public persistence::serializable<persistence_backend::neam, float, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, double> : public persistence::serializable<persistence_backend::neam, double, raw> {};
+
+
     template<>
-    class persistence::serializable<raw_data>
+    class persistence::serializable<persistence_backend::neam, raw_data>
     {
       public:
         /// \brief deserialize the object
@@ -105,7 +129,7 @@ namespace neam
 
     /// \brief a special case for C strings
     template<>
-    class persistence::serializable<char *>
+    class persistence::serializable<persistence_backend::neam, char *>
     {
       public:
         /// \brief deserialize the object
@@ -140,51 +164,8 @@ namespace neam
         }
     };
 
-
-    template<typename Type>
-    class persistence::serializable<Type *>
-    {
-      public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, Type **ptr)
-        {
-          // handle the null pointer case
-          if (!size)
-          {
-            *ptr = nullptr;
-            return true;
-          }
-
-          Type *tptr = reinterpret_cast<Type *>(operator new(sizeof(Type), std::nothrow));
-          if (!tptr)
-            return false;
-          *ptr = tptr;
-          return serializable<Type>::from_memory(memory, size, tptr);
-        }
-
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const Type* const* ptr)
-        {
-          // handle the null pointer case
-          if (!*ptr)
-          {
-            size = 0;
-            return true;
-          }
-          return serializable<Type>::to_memory(mem, size, *ptr);
-        }
-    };
-
     template<typename First, typename Second>
-    class persistence::serializable<std::pair<First, Second>>
+    class persistence::serializable<persistence_backend::neam, std::pair<First, Second>>
     {
       public:
         /// \brief deserialize the object
@@ -205,8 +186,8 @@ namespace neam
           if (size < sz[0] + 2 * sizeof(uint32_t) + sz[1])
             return false;
 
-          bool ret = serializable<First>::from_memory(memory + sizeof(uint32_t), sz[0], &ptr->first);
-          ret &= serializable<Second>::from_memory(memory + 2 * sizeof(uint32_t) + sz[0], sz[1], &ptr->second);
+          bool ret = serializable<persistence_backend::neam, First>::from_memory(memory + sizeof(uint32_t), sz[0], &ptr->first);
+          ret &= serializable<persistence_backend::neam, Second>::from_memory(memory + 2 * sizeof(uint32_t) + sz[0], sz[1], &ptr->second);
 
           return ret;
         }
@@ -223,7 +204,7 @@ namespace neam
 
 
           uint32_t *sz_mem = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          bool ret = serializable<First>::to_memory(mem, sz[0], &ptr->first);
+          bool ret = serializable<persistence_backend::neam, First>::to_memory(mem, sz[0], &ptr->first);
           if (!ret)
           {
             mem.pop(mem.size() - original_sz);
@@ -232,7 +213,7 @@ namespace neam
           *sz_mem = sz[0];
 
           sz_mem = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          ret = serializable<Second>::to_memory(mem, sz[1], &ptr->second);
+          ret = serializable<persistence_backend::neam, Second>::to_memory(mem, sz[1], &ptr->second);
           if (!ret)
           {
             mem.pop(mem.size() - original_sz);
@@ -246,165 +227,9 @@ namespace neam
         }
     };
 
-    template<typename Type>
-    class persistence::serializable<std::vector<Type>>
-    {
-      public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, std::vector<Type> *ptr)
-        {
-          array_wrapper<Type> o(nullptr, 0);
-          if (serializable<neam::array_wrapper<Type>>::from_memory(memory, size, &o))
-          {
-            new(ptr) std::vector<Type>();
-            ptr->reserve(o.size);
-            ptr->insert(ptr->begin(), o.array, o.array + o.size);
-            delete o.array;
-            return true;
-          }
-          return false;
-        }
-
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const std::vector<Type> *ptr)
-        {
-          array_wrapper<Type> o(const_cast<Type *>(ptr->data()), ptr->size());
-          return serializable<neam::array_wrapper<Type>>::to_memory(mem, size, &o);
-        }
-    };
-
-    template<>
-    class persistence::serializable<std::string>
-    {
-      public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, std::string *ptr)
-        {
-          char *str = nullptr;
-          if (serializable<char *>::from_memory(memory, size, &str))
-          {
-            new(ptr) std::string(str);
-            delete str;
-            return true;
-          }
-          return false;
-        }
-
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const std::string *ptr)
-        {
-          const char *str = const_cast<const char *>(ptr->data());
-          return serializable<char *>::to_memory(mem, size, &str);
-        }
-    };
-
-    template<typename Key, typename Value>
-    class persistence::serializable<std::map<Key, Value>>
-    {
-      public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, std::map<Key, Value> *ptr)
-        {
-          neam::array_wrapper<std::pair<Key, Value>> tmp(nullptr, 0);
-          if (!serializable<neam::array_wrapper<std::pair<Key, Value>>>::from_memory(memory, size, &tmp))
-          {
-            return false;
-          }
-
-          new(ptr) std::map<Key, Value>();
-
-          for (size_t i = 0; i < tmp.size; ++i)
-            ptr->emplace(std::move(tmp.array[i].first), std::move(tmp.array[i].second));
-
-          delete tmp.array;
-
-          return true;
-        }
-
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const std::map<Key, Value> *ptr)
-        {
-          std::vector<std::pair<const Key, Value> *> tmp;
-          tmp.reserve(ptr->size());
-
-          for (auto & it : *ptr)
-            tmp.emplace_back(const_cast<std::pair<const Key, Value> *>(&it));
-
-          return serializable<std::vector<std::pair<const Key, Value> *>>::to_memory(mem, size, &tmp);
-        }
-    };
-
-    template<typename Key, typename Value>
-    class persistence::serializable<std::unordered_map<Key, Value>>
-    {
-      public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, std::unordered_map<Key, Value> *ptr)
-        {
-          neam::array_wrapper<std::pair<Key, Value>> tmp(nullptr, 0);
-          if (!serializable<neam::array_wrapper<std::pair<Key, Value>>>::from_memory(memory, size, &tmp))
-          {
-            return false;
-          }
-
-          new(ptr) std::unordered_map<Key, Value>();
-
-          for (size_t i = 0; i < tmp.size; ++i)
-            ptr->emplace(std::move(tmp.array[i].first), std::move(tmp.array[i].second));
-
-          delete tmp.array;
-
-          return true;
-        }
-
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const std::unordered_map<Key, Value> *ptr)
-        {
-          std::vector<std::pair<const Key, Value> *> tmp;
-          tmp.reserve(ptr->size());
-
-          for (auto & it : *ptr)
-            tmp.emplace_back(const_cast<std::pair<const Key, Value> *>(&it));
-
-          return serializable<std::vector<std::pair<const Key, Value> *>>::to_memory(mem, size, &tmp);
-        }
-    };
-
     /// \brief serialize an array and all its elements
     template<typename Type>
-    class persistence::serializable<neam::array_wrapper<Type>>
+    class persistence::serializable<persistence_backend::neam, neam::array_wrapper<Type>>
     {
       public:
         /// \brief deserialize the object
@@ -435,7 +260,7 @@ namespace neam
 
             if (offset + elem_size > size)
               break;
-            if (!(serializable<Type>::from_memory(memory + offset, elem_size, ptr->array + index)))
+            if (!(serializable<persistence_backend::neam, Type>::from_memory(memory + offset, elem_size, ptr->array + index)))
               break;
 
             offset += elem_size;
@@ -495,7 +320,7 @@ namespace neam
           size_t element_size = 0;
 
           uint32_t *size_memory = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          if (!serializable<Type>::to_memory(mem, element_size, ptr))
+          if (!serializable<persistence_backend::neam, Type>::to_memory(mem, element_size, ptr))
           {
             mem.pop(sizeof(uint32_t));
             return false;

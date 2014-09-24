@@ -71,8 +71,10 @@ namespace neam
 {
   namespace cr
   {
-    template<>class persistence::serializable<toto> : public serializable_object
+    template<typename Backend> class persistence::serializable<Backend, toto> : public serializable_object
     <
+      Backend,
+
       NCRP_TYPED_OFFSET(toto, ti1),
       NCRP_TYPED_OFFSET(toto, i),
       NCRP_TYPED_OFFSET(toto, d),
@@ -83,8 +85,10 @@ namespace neam
       NCRP_TYPED_OFFSET(toto, ti3)
     > {};
 
-    template<>class persistence::serializable<titi> : public serializable_object
+    template<typename Backend> class persistence::serializable<Backend, titi> : public serializable_object
     <
+      Backend,
+
       NCRP_TYPED_OFFSET(titi, i),
       NCRP_TYPED_OFFSET(titi, d),
       NCRP_TYPED_OFFSET(titi, c),
@@ -158,13 +162,13 @@ int main()
   run_test(100000, "serialization of a small object", [&]() {mem_ti.clear();}, [&]() -> double
   {
     size_t ret = 0;
-    neam::cr::persistence::serializable<titi>::to_memory(mem_ti, ret, &ti);
+    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, titi>::to_memory(mem_ti, ret, &ti);
     return ret;
   });
   run_test(100000, "serialization of a small object (with a checksum)", [&]() {checksum_mem_ti.clear();}, [&]() -> double
   {
     size_t ret = 0;
-    neam::cr::persistence::serializable<neam::cr::checksum<titi>>::to_memory(checksum_mem_ti, ret, &ti);
+    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::cr::checksum<titi>>::to_memory(checksum_mem_ti, ret, &ti);
     return ret;
   });
 
@@ -172,14 +176,14 @@ int main()
   {
     size_t ret = 0;
     mem_to.clear();
-    neam::cr::persistence::serializable<toto>::to_memory(mem_to, ret, &to);
+    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, toto>::to_memory(mem_to, ret, &to);
     return ret;
   });
   run_test(15, "serialization of a BIG object (with a checksum)", [&]() {checksum_mem_to.clear();}, [&]() -> double
   {
     size_t ret = 0;
     mem_to.clear();
-    neam::cr::persistence::serializable<neam::cr::checksum<toto>>::to_memory(checksum_mem_to, ret, &to);
+    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::cr::checksum<toto>>::to_memory(checksum_mem_to, ret, &to);
     return ret;
   });
 
@@ -189,26 +193,26 @@ int main()
 
   run_test(100000, "deserialization of a small object", [&]{ti.~titi();}, [&]() -> double
   {
-    neam::cr::persistence::serializable<titi>::from_memory(data_ti, mem_ti.size(), &ti);
+    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, titi>::from_memory(data_ti, mem_ti.size(), &ti);
     return mem_ti.size();
   });
   data_ti = reinterpret_cast<char *>(checksum_mem_ti.get_contiguous_data());
   run_test(100000, "deserialization of a small object (with a checksum)", [&]{ti.~titi();}, [&]() -> double
   {
-    neam::cr::persistence::serializable<neam::cr::checksum<titi>>::from_memory(data_ti, checksum_mem_ti.size(), &ti);
+    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::cr::checksum<titi>>::from_memory(data_ti, checksum_mem_ti.size(), &ti);
     return checksum_mem_ti.size();
   });
 
   char *data_to = reinterpret_cast<char *>(mem_to.get_contiguous_data());
   run_test(40, "deserialization of a BIG object", [&]{to.~toto();}, [&]() -> double
   {
-    neam::cr::persistence::serializable<toto>::from_memory(data_to, mem_to.size(), &to);
+    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, toto>::from_memory(data_to, mem_to.size(), &to);
     return mem_to.size();
   });
   data_to = reinterpret_cast<char *>(checksum_mem_to.get_contiguous_data());
   run_test(15, "deserialization of a BIG object (with a checksum)", [&]{to.~toto();}, [&]() -> double
   {
-    neam::cr::persistence::serializable<neam::cr::checksum<toto>>::from_memory(data_to, checksum_mem_to.size(), &to);
+    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::cr::checksum<toto>>::from_memory(data_to, checksum_mem_to.size(), &to);
     return checksum_mem_to.size();
   });
   std::cout << " ----------------\n -- all tests done." << std::endl;

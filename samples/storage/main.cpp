@@ -44,8 +44,9 @@ namespace neam
 {
   namespace cr
   {
-    template<> class persistence::serializable<my_class> : public persistence::constructible_serializable_object
+    template<typename Backend> class persistence::serializable<Backend, my_class> : public persistence::constructible_serializable_object
     <
+      Backend,
       // embed in the template a call to the constructor
       // (yes you can. And this could also used to embed objects instances ;) ).
       // (and this could be used recursively to give the constructor objects instance)

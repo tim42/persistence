@@ -29,7 +29,6 @@
 #include <string>
 #include <fstream>
 #include "object.hpp"
-#include "serializable_specs.hpp"
 
 namespace neam
 {
@@ -69,7 +68,7 @@ namespace neam
           size_t size = 0;
 
           memory_allocator mem;
-          if (!neam::cr::persistence::serializable<Object>::to_memory(mem, size, const_cast<Object *>(&obj)))
+          if (!neam::cr::persistence::serializable<persistence_backend::neam, Object>::to_memory(mem, size, const_cast<Object *>(&obj)))
             return false;
 
           return _write_to_file(name, reinterpret_cast<char *>(mem.get_contiguous_data()), size);
@@ -89,7 +88,7 @@ namespace neam
           if (!ret)
             return nullptr;
 
-          if (!neam::cr::persistence::serializable<Object>::from_memory(memory, size, ret))
+          if (!neam::cr::persistence::serializable<persistence_backend::neam, Object>::from_memory(memory, size, ret))
           {
             delete reinterpret_cast<char *>(ret);
             return nullptr;

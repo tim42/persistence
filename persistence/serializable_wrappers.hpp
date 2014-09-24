@@ -40,7 +40,7 @@ namespace neam
     template<typename Type> class checksum {};
 
     template<typename Type>
-    class persistence::serializable<magic<Type>>
+    class persistence::serializable<persistence_backend::neam, magic<Type>>
     {
       private:
         constexpr static uint32_t magic_number = 0x07081992;
@@ -60,7 +60,7 @@ namespace neam
           if (magic != magic_number)
             return false;
 
-          return serializable<Type>::from_memory(memory + sizeof(uint32_t), size - sizeof(uint32_t), const_cast<Type *>(ptr));
+          return serializable<persistence_backend::neam, Type>::from_memory(memory + sizeof(uint32_t), size - sizeof(uint32_t), const_cast<Type *>(ptr));
         }
 
         /// \brief serialize the object
@@ -76,7 +76,7 @@ namespace neam
           if (!magic)
             return false;
 
-          if (serializable<Type>::to_memory(mem, o_size, const_cast<Type *>(ptr)))
+          if (serializable<persistence_backend::neam, Type>::to_memory(mem, o_size, const_cast<Type *>(ptr)))
           {
             size = o_size + sizeof(uint32_t);
             *magic = magic_number;
@@ -87,7 +87,7 @@ namespace neam
     };
 
     template<typename Type>
-    class persistence::serializable<checksum<Type>>
+    class persistence::serializable<persistence_backend::neam, checksum<Type>>
     {
       private:
         constexpr static uint64_t init_checksum = 0x10F41A0995AA52F1;
@@ -137,7 +137,7 @@ namespace neam
           if (checksum != simple_checksum(memory + sizeof(uint64_t), size - sizeof(uint64_t)))
             return false;
 
-          return serializable<Type>::from_memory(memory + sizeof(uint64_t), size - sizeof(uint64_t), const_cast<Type *>(ptr));
+          return serializable<persistence_backend::neam, Type>::from_memory(memory + sizeof(uint64_t), size - sizeof(uint64_t), const_cast<Type *>(ptr));
         }
 
         /// \brief serialize the object
@@ -155,7 +155,7 @@ namespace neam
             return false;
 
 
-          if (serializable<Type>::to_memory(mem, o_size, const_cast<Type *>(ptr)))
+          if (serializable<persistence_backend::neam, Type>::to_memory(mem, o_size, const_cast<Type *>(ptr)))
           {
             size = o_size + sizeof(uint64_t);
 

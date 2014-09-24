@@ -49,6 +49,9 @@ There is also some _wrappers_: _(a code that wrap the generated data and perform
 
 neam/persistence also provides a `storage` class that provide the ability to store serialized objects in a file and retrieve them using a _name_.
 
+It supports different "backends", meaning that if you want to use a different backend, there is only one parameter to set, the compiler select the correct backend at compile time !
+Current backends:
+  - neam (default)
 
 ## performances
 
@@ -110,8 +113,10 @@ namespace neam
 {
   namespace cr
   {
-      template<> class persistence::serializable<my_struct> : public serializable_object
+      template<typename Backend> class persistence::serializable<Backend, my_struct> : public serializable_object
       <
+        Backend, // we want it on all the available backends
+
         // simply list here the members you want to serialize / deserialize
         NCRP_TYPED_OFFSET(my_struct, my_double),
         NCRP_TYPED_OFFSET(my_struct, my_float),
@@ -147,9 +152,11 @@ namespace neam
 {
   namespace cr
   {
-      template<> class persistence::serializable<my_struct>
+      template<typename Backend> class persistence::serializable<Backend, my_struct>
       : public constructible_serializable_object
       <
+        Backend, // < we want it on all backends
+
         // embed in the template a call to the constructor (yes you can.)
         // (and this could be used recursively to give the constructor objects instance)
         N_CALL_CONSTRUCTOR(my_struct, N_EMBED(50)),
@@ -168,13 +175,13 @@ namespace neam
 ## serialize
 
 ```c++
-neam::cr::persistence::raw_data serialized = neam::cr::persistence::serialize(my_object);
+neam::cr::persistence::raw_data serialized = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_object);
 ```
 
 ## deserialize
 
 ```c++
-my_class *ptr = neam::cr::persistence::deserialize<my_class>(my_serialized_raw_data);
+my_class *ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam, my_class>(my_serialized_raw_data);
 
 // ...
 
@@ -188,7 +195,7 @@ This is simply what `neam::cr::persistence::serialize()` do:
 ```c++
 neam::cr::memory_allocator mem;
 size_t size = 0;
-neam::cr::persistence::serializable<my_class>::to_memory(mem, size, &my_object);
+neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, my_class>::to_memory(mem, size, &my_object);
 ```
 
 ## deserialize _(the hard way)_
@@ -202,7 +209,7 @@ size_t data_size = /*...*/;
 // we make sure the compiler doesn't call the constructor
 my_class *ptr= reinterpret_cast<my_class *>(operator new(sizeof(my_class)));
 
-neam::cr::persistence::serializable<my_class>::from_memory(data, data_size, ptr);
+neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, my_class>::from_memory(data, data_size, ptr);
 ```
 
 ## using _neam::cr::storage_
@@ -244,6 +251,7 @@ delete ptr;
 
 ## future
 A JSON backend.
+Refactor the file `serializable_specs.hpp`.
 
 ## author
 Timothée Feuillet (_neam_ or _tim42_).

@@ -39,8 +39,9 @@ namespace neam
 {
   namespace cr
   {
-    template<> class persistence::serializable<my_class> : public persistence::constructible_serializable_object
+    template<typename Backend> class persistence::serializable<Backend, my_class> : public persistence::constructible_serializable_object
     <
+      Backend, // < the backend (here: all backends)
       // embed in the template a call to the constructor
       // (yes you can. And this could also used to embed objects instances ;) ).
       // (and this could be used recursively to give the constructor objects instance)
@@ -65,7 +66,7 @@ int main()
   my_instance.print("original:\n  ");
 
   // serialize
-  neam::cr::raw_data serialized_data = neam::cr::persistence::serialize(my_instance);
+  neam::cr::raw_data serialized_data = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_instance);
   if (!serialized_data.data)
   {
     std::cerr << "Unable to serialize... :(" << std::endl;
@@ -75,7 +76,7 @@ int main()
   std::cout << "the size of the serialized instance is: " << serialized_data.size << " bytes" << std::endl;
 
   // deserialize
-  my_class *ptr = neam::cr::persistence::deserialize<my_class>(serialized_data);
+  my_class *ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam, my_class>(serialized_data);
   if (!ptr)
   {
     std::cerr << "Unable to de-serialize... :(" << std::endl;

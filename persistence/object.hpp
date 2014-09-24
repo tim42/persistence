@@ -49,6 +49,15 @@ namespace neam
   namespace cr
   {
 
+    /// \brief the list of defaulty availaible backend
+    namespace persistence_backend
+    {
+      struct neam {}; // default and faster.
+      struct JSON {}; // a json backend
+    } // namespace persitence_backend
+
+    struct raw {};
+
     /// \brief a way to now if your constructor is called from the serialization process
     struct from_serialization_t {constexpr from_serialization_t() {}};
 
@@ -64,7 +73,7 @@ namespace neam
 
         /// \brief a simple function that goes through all the serialization process and returns a \e raw_data struct that holds (and have the ownership) of the serialized object
         /// \return an empty \e raw_data instance (data = nullptr and size = 0) when the process has failed
-        template<typename Type>
+        template<typename Backend, typename Type>
         static raw_data serialize(const Type &obj)
         {
           raw_data rdt;
@@ -72,7 +81,7 @@ namespace neam
           neam::cr::memory_allocator mem;
           size_t size = 0;
 
-          if (!serializable<Type>::to_memory(mem, size, &obj))
+          if (!serializable<Backend, Type>::to_memory(mem, size, &obj))
             return rdt;
 
           return std::move(rdt.set(size, reinterpret_cast<int8_t *>(mem.give_up_data()), neam::assume_ownership));
@@ -81,12 +90,12 @@ namespace neam
         /// \brief deserialize a class
         /// \return nullptr when it has failed
         /// \note It's up to you to \b delete the returned object !!!
-        template<typename Type>
+        template<typename Backend, typename Type>
         static Type *deserialize(const raw_data &serialized_data)
         {
           Type *ptr = reinterpret_cast<Type *>(operator new(sizeof(Type)));
 
-          if (!serializable<Type>::from_memory(reinterpret_cast<const char *>(serialized_data.data), serialized_data.size, ptr))
+          if (!serializable<Backend, Type>::from_memory(reinterpret_cast<const char *>(serialized_data.data), serialized_data.size, ptr))
           {
             delete ptr;
             return nullptr;
@@ -102,7 +111,7 @@ namespace neam
         /// \see constructable_serializable_object
         /// \note this version if for dumping the memory of the object directly
         /// \note this is a recursive solution: \b avoid \b \e reference \b cycles in your constructs !!! (else: \e stack-overflow).
-        template<typename Type, typename... Args>
+        template<typename Backend, typename Type, typename... Args>
         class serializable
         {
           public:
@@ -140,7 +149,7 @@ namespace neam
         /// \param OffsetTypeList is a list of \code typed_offset <type, offsetof(my_class, member)> \endcode that could be simplified with the macro \code NRP_TYPPED_OFFSET(my_class, member) \endcode
         /// \note you still have to create a \code serializable \endcode specialization for the object, but you could simply use this trick: \code template<>class serializable<my_class> : public serializable_object<...> {}; \endcode
         /// \see constructible_serializable_object
-        template<typename... OffsetTypeList>
+        template<typename Backend, typename... OffsetTypeList>
         class serializable_object
         {
           public:
@@ -195,7 +204,7 @@ namespace neam
               if (offset + element_size > size)
                 return false;
 
-              bool res = serializable<typename OffsetType::type>::from_memory(memory + offset, element_size, reinterpret_cast<typename OffsetType::type *>(reinterpret_cast<uint8_t *>(ptr) + OffsetType::offset));
+              bool res = serializable<Backend, typename OffsetType::type>::from_memory(memory + offset, element_size, reinterpret_cast<typename OffsetType::type *>(reinterpret_cast<uint8_t *>(ptr) + OffsetType::offset));
 
               offset += element_size;
               return res;
@@ -210,7 +219,7 @@ namespace neam
               if (!size_memory)
                 return false;
 
-              if (!serializable<typename OffsetType::type>::to_memory(mem, element_size, reinterpret_cast<const typename OffsetType::type *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetType::offset)))
+              if (!serializable<Backend, typename OffsetType::type>::to_memory(mem, element_size, reinterpret_cast<const typename OffsetType::type *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetType::offset)))
               {
                 mem.pop(sizeof(uint32_t));
                 return false;
@@ -229,7 +238,7 @@ namespace neam
         /// \see class serializable_object
         /// \see neam::ct::constructor
         /// \see N_CALL_CONSTRUCTOR (in tools/constructor_call.hpp)
-        template<typename ConstructorCall, typename... OffsetTypeList>
+        template<typename Backend, typename ConstructorCall, typename... OffsetTypeList>
         class constructible_serializable_object
         {
           public:
@@ -240,7 +249,7 @@ namespace neam
             /// \return true if successful
             static bool from_memory(const char *memory, size_t size, void *ptr)
             {
-              if (!serializable_object<OffsetTypeList...>::from_memory(memory, size, ptr))
+              if (!serializable_object<Backend, OffsetTypeList...>::from_memory(memory, size, ptr))
                 return false;
 
               // call the constructor of the newly-created object (magic ?)
@@ -257,7 +266,7 @@ namespace neam
             static bool to_memory(memory_allocator &mem, size_t &size, const void *ptr)
             {
               // simply forward to serializable_object as we don't have to do anything here.
-              return serializable_object<OffsetTypeList...>::to_memory(mem, size, ptr);
+              return serializable_object<Backend, OffsetTypeList...>::to_memory(mem, size, ptr);
             }
         };
 
@@ -272,7 +281,7 @@ namespace neam
         };
 
 /// \brief this is quite "crade", isn't it ?? (this is the version with a pointer to member of the so famous C macro)
-#define N__OFFSETOF(class, member)                              reinterpret_cast<size_t>(&(reinterpret_cast<class *>(0)->*(&class::member)))
+#define N__OFFSETOF(class, member)                              reinterpret_cast<size_t>(&(reinterpret_cast<class *>(0)->member))
 
 /// \brief compute the type and the offset of the \e member of \e class
 /// \see class serializable_object
@@ -296,7 +305,8 @@ namespace neam
   } // namespace cr
 } // namespace neam
 
-#include "serializable_specs.hpp"
+#include "serializable_specs_gen.hpp"
+#include "serializable_specs_neam.hpp"
 #include "serializable_wrappers.hpp"
 
 #endif /*__N_2006814652382068822_103083989__OBJECT_HPP__*/

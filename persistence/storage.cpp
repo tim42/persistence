@@ -88,7 +88,7 @@ void neam::cr::storage::_sync()
   size_t size = 0;
 
   memory_allocator mem;
-  if (!neam::cr::persistence::serializable<magic<std::map<std::string, raw_data>>>::to_memory(mem, size, mapped_file))
+  if (!neam::cr::persistence::serializable<persistence_backend::neam, magic<std::map<std::string, raw_data>>>::to_memory(mem, size, mapped_file))
     return;
 
   file.close();
@@ -124,7 +124,7 @@ bool neam::cr::storage::_load()
 
   file.read(memory, size);
 
-  if (!neam::cr::persistence::serializable<magic<std::map<std::string, raw_data> *>>::from_memory(memory, size, &mapped_file))
+  if (!neam::cr::persistence::serializable<persistence_backend::neam, magic<std::map<std::string, raw_data> *>>::from_memory(memory, size, &mapped_file))
   {
     delete [] memory;
     mapped_file = nullptr;
