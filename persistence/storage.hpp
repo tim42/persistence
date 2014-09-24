@@ -1,0 +1,124 @@
+//
+// file : storage.hpp
+// in : file:///home/tim/projects/reflective/reflective/persistence/storage.hpp
+//
+// created by : Timothée Feuillet on linux.site
+// date: 20/09/2014 18:23:28
+//
+//
+// Copyright (C) 2014 Timothée Feuillet
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+//
+
+#ifndef __N_14097779492124764538_1369986451__STORAGE_HPP__
+# define __N_14097779492124764538_1369986451__STORAGE_HPP__
+
+#include <string>
+#include <fstream>
+#include "object.hpp"
+#include "serializable_specs.hpp"
+
+namespace neam
+{
+  namespace cr
+  {
+    /// \brief this is a \e reflective storage file (or whatever)
+    /// it provide a way to serialize / deserialize information from objects directly to a file
+    /// \note a file can contains multiple objects (they are named)
+    class storage
+    {
+      public:
+        storage(const std::string &filename);
+        ~storage();
+
+        /// \brief return the filename
+        std::string get_filename() const;
+
+        /// \brief return \b true if the file exists
+        bool exists() const;
+
+        /// \brief truncate the file (but keep it valid: storage::is_valid() will still return \b true)
+        void truncate();
+
+        /// \brief return \b true if the file is a valid \e storage file
+        bool is_valid();
+
+        /// \brief test whether or not if the storage object contains the object with the name \e name
+        bool contains(const std::string &name) const;
+
+        /// \brief remove a section from the file
+        void remove(const std::string &name);
+
+        /// \brief write the object to the file
+        template<typename Object>
+        bool write_to_file(const std::string &name, const Object &obj)
+        {
+          size_t size = 0;
+
+          memory_allocator mem;
+          if (!neam::cr::persistence::serializable<Object>::to_memory(mem, size, const_cast<Object *>(&obj)))
+            return false;
+
+          return _write_to_file(name, reinterpret_cast<char *>(mem.get_contiguous_data()), size);
+        }
+
+        template<typename Object>
+        Object *load_from_file(const std::string &name)
+        {
+          char *memory = nullptr;
+          size_t size = 0;
+
+          if (!_read_from_file(name, memory, size))
+            return nullptr;
+
+          Object *ret = reinterpret_cast<Object *>(operator new(sizeof(Object), std::nothrow));
+
+          if (!ret)
+            return nullptr;
+
+          if (!neam::cr::persistence::serializable<Object>::from_memory(memory, size, ret))
+          {
+            delete reinterpret_cast<char *>(ret);
+            return nullptr;
+          }
+          return ret;
+        }
+
+        /// \brief write serialized data to the file
+        bool _write_to_file(const std::string &name, char *memory, size_t size);
+
+        /// \brief return the data from a named section of the file
+        bool _read_from_file(const std::string &name, char *&memory, size_t &size);
+
+        /// \brief sync the changes in memory with the file
+        void _sync();
+
+        /// \brief (re) load the file
+        bool _load();
+
+      private:
+        std::map<std::string, raw_data> *mapped_file;
+        std::fstream file;
+        std::string filename;
+
+    };
+  } // namespace r
+} // namespace neam
+
+#endif /*__N_14097779492124764538_1369986451__STORAGE_HPP__*/
+
+// kate: indent-mode cstyle; indent-width 2; replace-tabs on; 
+

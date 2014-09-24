@@ -1,0 +1,67 @@
+# Compiled source #
+###################
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.a
+*.pch
+
+# Packages #
+############
+# it's better to unpack these files and commit the raw source
+# git has its own built in compression methods
+#*.7z
+#*.dmg
+#*.gz
+#*.iso
+#*.jar
+#*.rar
+#*.tar
+#*.zip
+
+# Logs and databases #
+######################
+*.log
+*.sql
+*.sqlite
+
+# backup copies (emacs/KATE FTW) #
+##################################
+*~
+*#
+*.bak
+.*.swp
+.*.kate-swp
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+*.lock
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.directory
+
+# build dir #
+#############
+
+build/
+build-clang/
+
+# kdevelop files/folders #
+##########################
+
+*.kdev4
+.kdev4/
+.kdev_include_paths
+
+# doc folders #
+###############
+
+documentation/*/*
