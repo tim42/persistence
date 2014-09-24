@@ -5,6 +5,17 @@
 **neam/persistence** is a small utility library that serialize and de-serialize C++ objects.
 The produced serialization output is mostly in the form _size-data_ and the binary data is only compatible with the same architecture (or more precisely, all architectures with the same endianness).
 
+## how to build
+
+```bash
+$ git submodule init
+$ git submodule update
+$ mkdir build && cd build && cmake ..
+$ make
+```
+
+The library is in `libs/`, the samples are in the current folder.
+
 ## why it's different
 
 neam/persistence is a non-intrusive, external serialization utility.
