@@ -11,92 +11,106 @@
 
 #include <persistence/persistence.hpp>
 
-std::string rand_str()
+/// \brief a class we want to be serialized / deserialized
+struct my_struct
 {
-  size_t len = 7 + rand() % 23; // well... modulo is not really good for randomness, but...
-
-  std::string ret;
-  for (size_t i = 0; i < len; ++i)
-    ret += static_cast<char>(33 + rand() % 93);
-  return ret;
-}
-
-
-struct titi
-{
-  titi(int = 0)
+  my_struct() {}
+  my_struct(my_struct &&o)
+    : s_int(o.s_int), s_vector(std::move(o.s_vector))
   {
-    for (size_t i = 0; i < 1501; ++i)
-      v.push_back(i * 5 - 2);
-    i = 0;
-    d = 42.00005;
-    c = 'm';
   }
-  ~titi() {}
 
-  int i;
-  double d;
-  std::vector<uint64_t> v;
+  my_struct &operator = (my_struct &&o)
+  {
+    s_int = (o.s_int);
+    s_vector = (std::move(o.s_vector));
+    return *this;
+  }
+  my_struct &operator = (my_struct &o)
+  {
+    s_int = (o.s_int);
+    s_vector = ((o.s_vector));
+    return *this;
+  }
+
+  int s_int;
+  std::vector<int> s_vector;
+};
+
+/// \brief another class we want to be serialized / deserialized
+class my_class
+{
+  public:
+    /// \brief mandatory constructor
+    my_class(int _i, double _s_double, float _s_float, int _s_int) : s_int(_s_int), s_double(_s_double), s_float(_s_float), i(_i)
+    {
+      for (int i = 0; i < _i; ++i)
+      {
+        my_struct st;
+        for (int j = 0; j < _i; ++j)
+          st.s_vector.push_back(j);
+        s_map[i] = st;
+      }
+    }
+
+    ~my_class() {}
+
   private:
-  char c;
+    /// \brief the post-deserialization function that will be called after deserializing the object
+    void post_deserialization(int _i)
+    {
+      i = _i;
+    }
 
-  friend class neam::cr::persistence;
+  private: // serialized properties
+    int s_int;
+    double s_double;
+    float s_float;
+
+  public:
+    std::map<int, my_struct> s_map;
+
+  private: // non-serialized properties
+    int i;
+
+    friend neam::cr::persistence;
 };
 
-struct toto
-{
-  toto()
-  {
-    i = 42;
-    d = -0.000000042;
-    c = 'M';
-    f = 33.33333333333333;
-
-    for (size_t i = 0; i < 67252; ++i)
-      m.emplace(rand_str(), 0);
-  }
-  ~toto() {}
-
-  titi ti1;
-  int i;
-  double d;
-  std::map<std::string, titi> m;
-  titi ti2;
-  char c;
-  float f;
-  titi ti3;
-};
-
+// the serialization meta-data
 namespace neam
 {
   namespace cr
   {
-    template<typename Backend> class persistence::serializable<Backend, toto> : public serializable_object
+    template<typename Backend> class persistence::serializable<Backend, my_class> : public persistence::constructible_serializable_object
     <
-      Backend,
+      Backend, // < the backend (here: all backends)
 
-      NCRP_TYPED_OFFSET(toto, ti1),
-      NCRP_TYPED_OFFSET(toto, i),
-      NCRP_TYPED_OFFSET(toto, d),
-      NCRP_TYPED_OFFSET(toto, m),
-      NCRP_TYPED_OFFSET(toto, ti2),
-      NCRP_TYPED_OFFSET(toto, c),
-      NCRP_TYPED_OFFSET(toto, f),
-      NCRP_TYPED_OFFSET(toto, ti3)
+      // Embed in the template a call to the post-deserialization function
+      // This function will be called just after the object has been deserialized
+      N_CALL_POST_FUNCTION(my_class, N_EMBED(42)),
+
+      // simply list here the members you want to serialize / deserialize
+      NCRP_TYPED_OFFSET(my_class, s_int),
+      NCRP_TYPED_OFFSET(my_class, s_map),
+      NCRP_TYPED_OFFSET(my_class, s_double),
+      NCRP_TYPED_OFFSET(my_class, s_float)
     > {};
 
-    template<typename Backend> class persistence::serializable<Backend, titi> : public serializable_object
+    template<typename Backend> class persistence::serializable<Backend, my_struct> : public persistence::serializable_object
     <
-      Backend,
+      Backend, // < the backend (here: all backends)
 
-      NCRP_TYPED_OFFSET(titi, i),
-      NCRP_TYPED_OFFSET(titi, d),
-      NCRP_TYPED_OFFSET(titi, c),
-      NCRP_TYPED_OFFSET(titi, v)
+      // simply list here the members you want to serialize / deserialize
+      NCRP_TYPED_OFFSET(my_struct, s_int),
+      NCRP_TYPED_OFFSET(my_struct, s_vector)
     > {};
-  } // namespace r
+  } // namespace cr
 } // namespace neam
 
+
+// ///////////////////////////////////////////////
+// ///////////////////////////////////////////////
+// ///////////////////////////////////////////////
 
 template<typename PreFunction, typename Function>
 void run_test(size_t count, const std::string &name, PreFunction pre, Function fnc)
@@ -147,75 +161,50 @@ void run_test(size_t count, const std::string &name, PreFunction pre, Function f
 
 int main()
 {
-  srand(reinterpret_cast<size_t>(malloc(0)) ^ time(nullptr));
-
   std::cout << " -- initializing data..." << std::endl;
-  titi ti;
-  toto to;
-  neam::cr::memory_allocator mem_ti;
-  neam::cr::memory_allocator checksum_mem_ti;
-  neam::cr::memory_allocator mem_to;
-  neam::cr::memory_allocator checksum_mem_to;
+
+  my_class my_instance(75, 42.00000042, 4.2e-5, 23);
+  my_class my_big_instance(12000, 42.00000042, 4.2e-5, 23);
 
   std::cout << " ----------------\n" << std::endl;
 
-  run_test(100000, "serialization of a small object", [&]() {mem_ti.clear();}, [&]() -> double
+
+  neam::cr::raw_data rd_small;
+  run_test(100000, "serialization of a small object", [&] {rd_small._clean();}, [&]() -> double
   {
-    size_t ret = 0;
-    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, titi>::to_memory(mem_ti, ret, &ti);
-    return ret;
-  });
-  run_test(100000, "serialization of a small object (with a checksum)", [&]() {checksum_mem_ti.clear();}, [&]() -> double
-  {
-    size_t ret = 0;
-    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::cr::checksum<titi>>::to_memory(checksum_mem_ti, ret, &ti);
-    return ret;
+    rd_small = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_instance);
+    rd_small.assume_ownership();
+    return rd_small.size;
   });
 
-  run_test(40, "serialization of a BIG object", [&]() {mem_to.clear();}, [&]() -> double
+  neam::cr::raw_data rd_big;
+  run_test(20, "serialization of a BIG object", [&] {rd_big._clean();}, [&]() -> double
   {
-    size_t ret = 0;
-    mem_to.clear();
-    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, toto>::to_memory(mem_to, ret, &to);
-    return ret;
-  });
-  run_test(15, "serialization of a BIG object (with a checksum)", [&]() {checksum_mem_to.clear();}, [&]() -> double
-  {
-    size_t ret = 0;
-    mem_to.clear();
-    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::cr::checksum<toto>>::to_memory(checksum_mem_to, ret, &to);
-    return ret;
+    rd_big = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_big_instance);
+    rd_big.assume_ownership();
+    return rd_big.size;
   });
 
   std::cout << " ----------------\n" << std::endl;
 
-  char *data_ti = reinterpret_cast<char *>(mem_ti.get_contiguous_data());
+  my_class *ptr = reinterpret_cast<my_class *>(operator new(sizeof(my_class)));
+  ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam>(rd_small, ptr);
 
-  run_test(100000, "deserialization of a small object", [&]{ti.~titi();}, [&]() -> double
+  run_test(100000, "deserialization of a small object", [&] {ptr->~my_class();}, [&]() -> double
   {
-    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, titi>::from_memory(data_ti, mem_ti.size(), &ti);
-    return mem_ti.size();
-  });
-  data_ti = reinterpret_cast<char *>(checksum_mem_ti.get_contiguous_data());
-  run_test(100000, "deserialization of a small object (with a checksum)", [&]{ti.~titi();}, [&]() -> double
-  {
-    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::cr::checksum<titi>>::from_memory(data_ti, checksum_mem_ti.size(), &ti);
-    return checksum_mem_ti.size();
+    ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam>(rd_small, ptr);
+    return rd_small.size;
   });
 
-  char *data_to = reinterpret_cast<char *>(mem_to.get_contiguous_data());
-  run_test(40, "deserialization of a BIG object", [&]{to.~toto();}, [&]() -> double
+  run_test(20, "deserialization of a BIG object", [&] {ptr->~my_class();}, [&]() -> double
   {
-    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, toto>::from_memory(data_to, mem_to.size(), &to);
-    return mem_to.size();
+    ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam>(rd_big, ptr);
+    return rd_big.size;
   });
-  data_to = reinterpret_cast<char *>(checksum_mem_to.get_contiguous_data());
-  run_test(15, "deserialization of a BIG object (with a checksum)", [&]{to.~toto();}, [&]() -> double
-  {
-    neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::cr::checksum<toto>>::from_memory(data_to, checksum_mem_to.size(), &to);
-    return checksum_mem_to.size();
-  });
-  std::cout << " ----------------\n -- all tests done." << std::endl;
+
+  delete ptr;
+  rd_big._clean();
+  rd_small._clean();
 
   return 0;
 }

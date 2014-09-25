@@ -104,6 +104,18 @@ namespace neam
           return ptr;
         }
 
+        /// \brief deserialize a class, uses an already existing object
+        /// \return nullptr when it has failed, else return the pointer in \e ptr
+        template<typename Backend, typename Type>
+        static Type *deserialize(const raw_data &serialized_data, Type *ptr)
+        {
+          if (!serializable<Backend, Type>::from_memory(reinterpret_cast<const char *>(serialized_data.data), serialized_data.size, ptr))
+            return nullptr;
+
+          return ptr;
+        }
+
+
         /// \brief the is the contract for a serializable object.
         /// you \e simply have to specialize it with the type requested and serialization for this type will work.
         /// \note you should only specialize this class for basic types. (floating points, integers, strings, arrays, ...)
@@ -232,12 +244,12 @@ namespace neam
         };
 
 
-        /// \brief construct an object and call its constructor
+        /// \brief construct an object and then call a method called \e post_deserialization
         /// behave exactly like the class serializable_object.
         /// For an example, see the README.md at the root of the project.
         /// \see class serializable_object
         /// \see neam::ct::constructor
-        /// \see N_CALL_CONSTRUCTOR (in tools/constructor_call.hpp)
+        /// \see N_CALL_POST_FUNCTION
         template<typename Backend, typename ConstructorCall, typename... OffsetTypeList>
         class constructible_serializable_object
         {
@@ -252,8 +264,8 @@ namespace neam
               if (!serializable_object<Backend, OffsetTypeList...>::from_memory(memory, size, ptr))
                 return false;
 
-              // call the constructor of the newly-created object (magic ?)
-              ConstructorCall::on(reinterpret_cast<typename ConstructorCall::type *>(ptr));
+              // call the constructor of the newly-initialized object (magic ?)
+              ConstructorCall::forward_to(reinterpret_cast<typename ConstructorCall::type *>(ptr), &ConstructorCall::type::post_deserialization);
 
               return true;
             }
@@ -270,6 +282,7 @@ namespace neam
             }
         };
 
+#define N_CALL_POST_FUNCTION(ObjectType, ...)             N_CT_CONSTRUCTOR_CALL_PLACEMENT(ObjectType, ##__VA_ARGS__)
 
 
         /// \see serializable_object
@@ -307,6 +320,7 @@ namespace neam
 
 #include "serializable_specs_gen.hpp"
 #include "serializable_specs_neam.hpp"
+#include "serializable_specs_json.hpp"
 #include "serializable_wrappers.hpp"
 
 #endif /*__N_2006814652382068822_103083989__OBJECT_HPP__*/

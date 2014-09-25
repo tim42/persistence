@@ -15,8 +15,6 @@ class my_class
     /// \brief mandatory constructor
     my_class(int _i, double _s_double, float _s_float, int _s_int) : s_int(_s_int), s_double(_s_double), s_float(_s_float), i(_i) {}
 
-    /// \brief the constructor that will be called when deserializing the object
-    my_class(int _i, neam::cr::from_serialization_t) : i(_i) {}
 
     void print(const std::string &str) const
     {
@@ -26,6 +24,13 @@ class my_class
     void increment()
     {
       ++s_int;
+    }
+
+  private:
+    /// \brief the function that will be called when deserializing the object
+    void post_deserialization(int _i, neam::cr::from_serialization_t)
+    {
+      i = _i;
     }
 
   private: // serialized properties
@@ -47,14 +52,10 @@ namespace neam
     template<typename Backend> class persistence::serializable<Backend, my_class> : public persistence::constructible_serializable_object
     <
       Backend,
-      // embed in the template a call to the constructor
-      // (yes you can. And this could also used to embed objects instances ;) ).
-      // (and this could be used recursively to give the constructor objects instance)
-      //
-      // NOTE: the neam::cr::from_serialization simply yield a value of type neam::cr::from_serialization_t
-      //       and as it is already a neam::ct::embed, you should not embed it !!
-      //       This makes possible to have a constructor specially designed for post-deserialization cases.
-      N_CALL_CONSTRUCTOR(my_class, N_EMBED(42), neam::cr::from_serialization),
+
+      // Embed in the template a call to the post-deserialization function
+      // This function will be called just after the object has been deserialized
+      N_CALL_POST_FUNCTION(my_class, N_EMBED(42), neam::cr::from_serialization),
 
       // simply list here the members you want to serialize / deserialize
       NCRP_TYPED_OFFSET(my_class, s_int),

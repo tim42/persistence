@@ -57,9 +57,9 @@ Current backends:
 
 Tests ran on an Intel i7, with g++ 4.8.3, in release mode:
   - serialization:
-    - slower: **1.6 Gb/s** (size of the serialized data: 1.2 Gb)
+    - **1.7 Gb/s** (size of the serialized data: 1.15 Gb)
   - deserialization:
-    - slower: **3.2 Gb/s** (size of the serialized data: 1.2 Gb)
+    - **2.3 Gb/s** (size of the serialized data: 1.15 Gb)
 
 This is fast, isn't it ?
 
@@ -113,7 +113,8 @@ namespace neam
 {
   namespace cr
   {
-      template<typename Backend> class persistence::serializable<Backend, my_struct> : public serializable_object
+      template<typename Backend> class persistence::serializable<Backend, my_struct>
+      : public serializable_object
       <
         Backend, // we want it on all the available backends
 
@@ -157,9 +158,9 @@ namespace neam
       <
         Backend, // < we want it on all backends
 
-        // embed in the template a call to the constructor (yes you can.)
-        // (and this could be used recursively to give the constructor objects instance)
-        N_CALL_CONSTRUCTOR(my_struct, N_EMBED(50)),
+        // Embed in the template a call to the post-deserialization function
+        // This function will be called just after the object has been deserialized
+        N_CALL_POST_FUNCTION(my_struct, N_EMBED(50)),
 
         // simply list here the members you want to serialize / deserialize
         NCRP_TYPED_OFFSET(my_struct, my_double),
@@ -175,7 +176,8 @@ namespace neam
 ## serialize
 
 ```c++
-neam::cr::persistence::raw_data serialized = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_object);
+neam::cr::persistence::raw_data serialized;
+serialized = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_object);
 ```
 
 ## deserialize

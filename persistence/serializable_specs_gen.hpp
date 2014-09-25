@@ -122,7 +122,7 @@ namespace neam
           if (serializable<Backend, neam::array_wrapper<Type>>::from_memory(memory, size, &o))
           {
             new(ptr) std::vector<Type>();
-            ptr->reserve(o.size);
+            ptr->reserve(o.size + 1);
             ptr->insert(ptr->begin(), o.array, o.array + o.size);
             delete o.array;
             return true;
@@ -195,9 +195,12 @@ namespace neam
           new(ptr) std::map<Key, Value>();
 
           for (size_t i = 0; i < tmp.size; ++i)
-            ptr->emplace(std::move(tmp.array[i].first), std::move(tmp.array[i].second));
+          {
+            ptr->emplace_hint(ptr->end(), std::move(tmp.array[i].first), std::move(tmp.array[i].second));
+            tmp.array[i].~pair();
+           }
 
-          delete tmp.array;
+          delete reinterpret_cast<char *>(tmp.array);
 
           return true;
         }
@@ -269,3 +272,48 @@ namespace neam
 
 // kate: indent-mode cstyle; indent-width 2; replace-tabs on; 
 
+/*
+          // toto
+          ...
+    .     serializable_object<...>::from_memory_single()    // for the std::map<..., titi>
+    |     serializable<neam::cr::persistence_backend::neam, std::map<std::string, titi, ...>>
+    |     serializable<neam::cr::persistence_backend::neam, neam::array_wrapper<std::pair<std::string, titi> >>
+    v     serializable<neam::cr::persistence_backend::neam, std::pair<std::string, titi>>
+
+          // titi
+          serializable_object<...>::from_memory
+          serializable_object<...>::from_memory_single      // for the vector
+          serializable<neam::cr::persistence_backend::neam, std::vector<unsigned long>
+
+          // tha vector
+          std::vector<unsigned long, std::allocator<unsigned long> >::reserve()
+          ....
+
+
+==804==    at 0x4C28EA0: operator new(unsigned long) (in /usr/lib64/valgrind/vgpreload_memcheck-amd64-linux.so)
+==804==    by 0x41847D: __gnu_cxx::new_allocator<unsigned long>::allocate(unsigned long, void const*) (new_allocator.h:104)
+==804==    by 0x417728: std::_Vector_base<unsigned long, std::allocator<unsigned long> >::_M_allocate(unsigned long) (in /home/tim/projects/persistence/build/benchmark-persistence-0.0.1)
+==804==    by 0x418D17: unsigned long* std::vector<unsigned long, std::allocator<unsigned long> >::_M_allocate_and_copy<std::move_iterator<unsigned long*> >(unsigned long, std::move_iterator<unsigned long*>, std::move_iterator<unsigned long*>) (stl_vector.h:1138)
+==804==    by 0x4180A8: std::vector<unsigned long, std::allocator<unsigned long> >::reserve(unsigned long) (vector.tcc:75)
+==804==    by 0x417384: neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, std::vector<unsigned long, std::allocator<unsigned long> >>::from_memory(char const*, unsigned long, std::vector<unsigned long, std::allocator<unsigned long> >*) (serializable_specs_gen.hpp:125)
+==804==    by 0x416248: bool neam::cr::persistence::serializable_object<neam::cr::persistence_backend::neam, neam::cr::persistence::typed_offset<int, 0ul>, neam::cr::persistence::typed_offset<double, 8ul>, neam::cr::persistence::typed_offset<char, 40ul>, neam::cr::persistence::typed_offset<std::vector<unsigned long, std::allocator<unsigned long> >, 16ul> >::from_memory_single<neam::cr::persistence::typed_offset<std::vector<unsigned long, std::allocator<unsigned long> >, 16ul> >(char const*, unsigned long, void*, unsigned long&) (object.hpp:207)
+==804==    by 0x415269: neam::cr::persistence::serializable_object<neam::cr::persistence_backend::neam, neam::cr::persistence::typed_offset<int, 0ul>, neam::cr::persistence::typed_offset<double, 8ul>, neam::cr::persistence::typed_offset<char, 40ul>, neam::cr::persistence::typed_offset<std::vector<unsigned long, std::allocator<unsigned long> >, 16ul> >::from_memory(char const*, unsigned long, void*) (object.hpp:165)
+==804==    by 0x418EA6: neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, std::pair<std::string, titi>>::from_memory(char const*, unsigned long, std::pair<std::string, titi>*) (serializable_specs_neam.hpp:190)
+==804==    by 0x4182B3: neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::array_wrapper<std::pair<std::string, titi> >>::from_memory(char const*, unsigned long, neam::array_wrapper<std::pair<std::string, titi> >*) (serializable_specs_neam.hpp:263)
+==804==    by 0x41747D: neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, std::map<std::string, titi, std::less<std::string>, std::allocator<std::pair<std::string const, titi> > >>::from_memory(char const*, unsigned long, std::map<std::string, titi, std::less<std::string>, std::allocator<std::pair<std::string const, titi> > >*) (serializable_specs_gen.hpp:190)
+==804==    by 0x416516: bool neam::cr::persistence::serializable_object<neam::cr::persistence_backend::neam, neam::cr::persistence::typed_offset<titi, 0ul>, neam::cr::persistence::typed_offset<int, 48ul>, neam::cr::persistence::typed_offset<double, 56ul>, neam::cr::persistence::typed_offset<std::map<std::string, titi, std::less<std::string>, std::allocator<std::pair<std::string const, titi> > >, 64ul>, neam::cr::persistence::typed_offset<titi, 112ul>, neam::cr::persistence::typed_offset<char, 160ul>, neam::cr::persistence::typed_offset<float, 164ul>, neam::cr::persistence::typed_offset<titi, 168ul> >::from_memory_single<neam::cr::persistence::typed_offset<std::map<std::string, titi, std::less<std::string>, std::allocator<std::pair<std::string const, titi> > >, 64ul> >(char const*, unsigned long, void*, unsigned long&) (object.hpp:207)
+==804== 
+==804== 807,309,848 bytes in 67,231 blocks are definitely lost in loss record 3 of 3
+==804==    at 0x4C28EA0: operator new(unsigned long) (in /usr/lib64/valgrind/vgpreload_memcheck-amd64-linux.so)
+==804==    by 0x41847D: __gnu_cxx::new_allocator<unsigned long>::allocate(unsigned long, void const*) (new_allocator.h:104)
+==804==    by 0x417728: std::_Vector_base<unsigned long, std::allocator<unsigned long> >::_M_allocate(unsigned long) (in /home/tim/projects/persistence/build/benchmark-persistence-0.0.1)
+==804==    by 0x418D17: unsigned long* std::vector<unsigned long, std::allocator<unsigned long> >::_M_allocate_and_copy<std::move_iterator<unsigned long*> >(unsigned long, std::move_iterator<unsigned long*>, std::move_iterator<unsigned long*>) (stl_vector.h:1138)
+==804==    by 0x4180A8: std::vector<unsigned long, std::allocator<unsigned long> >::reserve(unsigned long) (vector.tcc:75)
+==804==    by 0x417384: neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, std::vector<unsigned long, std::allocator<unsigned long> >>::from_memory(char const*, unsigned long, std::vector<unsigned long, std::allocator<unsigned long> >*) (serializable_specs_gen.hpp:125)
+==804==    by 0x416248: bool neam::cr::persistence::serializable_object<neam::cr::persistence_backend::neam, neam::cr::persistence::typed_offset<int, 0ul>, neam::cr::persistence::typed_offset<double, 8ul>, neam::cr::persistence::typed_offset<char, 40ul>, neam::cr::persistence::typed_offset<std::vector<unsigned long, std::allocator<unsigned long> >, 16ul> >::from_memory_single<neam::cr::persistence::typed_offset<std::vector<unsigned long, std::allocator<unsigned long> >, 16ul> >(char const*, unsigned long, void*, unsigned long&) (object.hpp:207)
+==804==    by 0x415269: neam::cr::persistence::serializable_object<neam::cr::persistence_backend::neam, neam::cr::persistence::typed_offset<int, 0ul>, neam::cr::persistence::typed_offset<double, 8ul>, neam::cr::persistence::typed_offset<char, 40ul>, neam::cr::persistence::typed_offset<std::vector<unsigned long, std::allocator<unsigned long> >, 16ul> >::from_memory(char const*, unsigned long, void*) (object.hpp:165)
+==804==    by 0x418EA6: neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, std::pair<std::string, titi>>::from_memory(char const*, unsigned long, std::pair<std::string, titi>*) (serializable_specs_neam.hpp:190)
+==804==    by 0x4182B3: neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, neam::array_wrapper<std::pair<std::string, titi> >>::from_memory(char const*, unsigned long, neam::array_wrapper<std::pair<std::string, titi> >*) (serializable_specs_neam.hpp:263)
+==804==    by 0x41747D: neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, std::map<std::string, titi, std::less<std::string>, std::allocator<std::pair<std::string const, titi> > >>::from_memory(char const*, unsigned long, std::map<std::string, titi, std::less<std::string>, std::allocator<std::pair<std::string const, titi> > >*) (serializable_specs_gen.hpp:190)
+==804==    by 0x416516: bool neam::cr::persistence::serializable_object<neam::cr::persistence_backend::neam, neam::cr::persistence::typed_offset<titi, 0ul>, neam::cr::persistence::typed_offset<int, 48ul>, neam::cr::persistence::typed_offset<double, 56ul>, neam::cr::persistence::typed_offset<std::map<std::string, titi, std::less<std::string>, std::allocator<std::pair<std::string const, titi> > >, 64ul>, neam::cr::persistence::typed_offset<titi, 112ul>, neam::cr::persistence::typed_offset<char, 160ul>, neam::cr::persistence::typed_offset<float, 164ul>, neam::cr::persistence::typed_offset<titi, 168ul> >::from_memory_single<neam::cr::persistence::typed_offset<std::map<std::string, titi, std::less<std::string>, std::allocator<std::pair<std::string const, titi> > >, 64ul> >(char const*, unsigned long, void*, unsigned long&) (object.hpp:207)
+*/
