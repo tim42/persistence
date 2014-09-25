@@ -129,9 +129,13 @@ namespace neam
 
 ```
 
-## make a class / struct compatible with neam/persistence (and call the constructor on deserialized objects)
-```C++
+## make a class / struct compatible with neam/persistence (and call a post-deserialization function on deserialized objects)
 
+**NOTE:** constructors aren't called because the compiler will want to initialize **all** the members of your class
+and in the case of a post-deserialization, where members (possibly objects with dynamic allocation) have been already initialized,
+this would result in a massive memory leak and revert the object in a default state.
+
+```C++
 // this is the struct your want to make serializable:
 struct my_struct
 {
@@ -143,6 +147,12 @@ struct my_struct
 
   // the constructor
   my_struct(size_t size) : non_serialized(new int[size]) {}
+
+  // the post-deserialization function
+  void post_deserialization(size_t size)
+  {
+     non_serialized = new int[size];
+  }
 
   // and the destructor. (DO NOT FORGET IT IF YOU DO DYNAMIC ALLOCATION !!!)
   ~my_struct() {delete [] non_serialized;}
