@@ -85,8 +85,20 @@ int main()
   my_class *ptr = storage.load_from_file<my_class>("sample/storage/instance");
   if (!ptr)
   {
-    std::cerr << "Unable to de-serialize... :(" << std::endl;
-    return 1;
+    std::cerr << "Invalid data: reset 'sample/storage/instance'" << std::endl;
+
+    // re-init the storage with a valid value
+    init_storage(storage);
+
+    // re-get the pointer
+    ptr = storage.load_from_file<my_class>("sample/storage/instance");
+
+    // should never happen
+    if (!ptr)
+    {
+      std::cerr << "Unable to retrieve valid data... :(" << std::endl;
+      return 1;
+    }
   }
 
   ptr->print("deserialized:\n  ");
