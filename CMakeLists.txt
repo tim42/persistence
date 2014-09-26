@@ -18,9 +18,9 @@ set(PROJ_VERSION_NAME "")
 set(PROJ_NAME persistence)
 
 if (PROJ_VERSION_NAME STREQUAL "")
-	set(PROJ_APP ${PROJ_NAME}-${PROJ_VERSION_MAJOR}.${PROJ_VERSION_MINOR}.${PROJ_VERSION_SUPERMINOR})
+  set(PROJ_APP ${PROJ_NAME}-${PROJ_VERSION_MAJOR}.${PROJ_VERSION_MINOR}.${PROJ_VERSION_SUPERMINOR})
 else ()
-	set(PROJ_APP ${PROJ_NAME}-${PROJ_VERSION_NAME}-${PROJ_VERSION_MAJOR}.${PROJ_VERSION_MINOR}.${PROJ_VERSION_SUPERMINOR})
+  set(PROJ_APP ${PROJ_NAME}-${PROJ_VERSION_NAME}-${PROJ_VERSION_MAJOR}.${PROJ_VERSION_MINOR}.${PROJ_VERSION_SUPERMINOR})
 endif()
 
 project(${PROJ_APP})
@@ -28,8 +28,6 @@ project(${PROJ_APP})
 message(STATUS "-----------------------------------------------")
 message(STATUS "Building neam/${PROJ_NAME} :: ${PROJ_APP}")
 message(STATUS "-----------------------------------------------")
-message(STATUS "")
-message(STATUS "")
 
 
 if (CMAKE_BUILD_TYPE STREQUAL "")
@@ -59,16 +57,23 @@ include(cmake/deps.cmake)
 include(cmake/flags.cmake)
 
 include_directories("./${PROJ_NAME}/")
+
 include_directories("./")
 
 # build a static lib
 add_subdirectory(${PROJ_NAME})
 
+# export project name to parent project
+if (NOT ${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
+  set(lib${PROJ_NAME} ${PROJ_APP} PARENT_SCOPE)
+endif()
 
 # build the samples
-add_subdirectory(samples/simple)
-add_subdirectory(samples/benchmark)
-add_subdirectory(samples/storage)
+if (${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
+  add_subdirectory(samples/simple)
+  add_subdirectory(samples/benchmark)
+  add_subdirectory(samples/storage)
+endif()
 
 # copy
 # file(COPY ./data DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/)
