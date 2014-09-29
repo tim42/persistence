@@ -53,7 +53,7 @@ namespace neam
     namespace persistence_backend
     {
       struct neam {}; // default and faster.
-      struct JSON {}; // a json backend
+      struct verbose {}; // a verbose backend (serialization only)
     } // namespace persitence_backend
 
     struct raw {};
@@ -70,19 +70,21 @@ namespace neam
     /// Making the \e persistence namespace a class allowed one to use \code friend class neam::cr::persistence; \endcode to allow access of private members.
     struct persistence
     {
-
         /// \brief a simple function that goes through all the serialization process and returns a \e raw_data struct that holds (and have the ownership) of the serialized object
         /// \return an empty \e raw_data instance (data = nullptr and size = 0) when the process has failed
-        template<typename Backend, typename Type>
-        static raw_data serialize(const Type &obj)
+        template<typename Backend, typename Type, typename... Params>
+        static raw_data serialize(const Type &obj, Params &&... p)
         {
           raw_data rdt;
 
           neam::cr::memory_allocator mem;
           size_t size = 0;
 
-          if (!serializable<Backend, Type>::to_memory(mem, size, &obj))
+          if (!serializable<Backend, Type>::to_memory(mem, size, &obj, std::forward<Params>(p)...) || mem.has_failed())
             return rdt;
+
+          *reinterpret_cast<char *>(mem.allocate(1)) = 0;
+          size = mem.size();
 
           return std::move(rdt.set(size, reinterpret_cast<int8_t *>(mem.give_up_data()), neam::assume_ownership));
         }
@@ -90,12 +92,13 @@ namespace neam
         /// \brief deserialize a class
         /// \return nullptr when it has failed
         /// \note It's up to you to \b delete the returned object !!!
-        template<typename Backend, typename Type>
-        static Type *deserialize(const raw_data &serialized_data)
+        template<typename Backend, typename Type, typename... Params>
+        static Type *deserialize(const raw_data &serialized_data, Params &&... p)
         {
           Type *ptr = reinterpret_cast<Type *>(operator new(sizeof(Type)));
 
-          if (!serializable<Backend, Type>::from_memory(reinterpret_cast<const char *>(serialized_data.data), serialized_data.size, ptr))
+          size_t size = serialized_data.size; // here because of the JSON serializer: it needs a non-const reference !.
+          if (!serializable<Backend, Type>::from_memory(reinterpret_cast<const char *>(serialized_data.data), size, ptr, std::forward<Params>(p)...))
           {
             delete ptr;
             return nullptr;
@@ -106,10 +109,11 @@ namespace neam
 
         /// \brief deserialize a class, uses an already existing object
         /// \return nullptr when it has failed, else return the pointer in \e ptr
-        template<typename Backend, typename Type>
-        static Type *deserialize(const raw_data &serialized_data, Type *ptr)
+        template<typename Backend, typename Type, typename... Params>
+        static Type *deserialize(const raw_data &serialized_data, Type *ptr, Params &&... p)
         {
-          if (!serializable<Backend, Type>::from_memory(reinterpret_cast<const char *>(serialized_data.data), serialized_data.size, ptr))
+          size_t size = serialized_data.size; // here because of the JSON serializer: it needs a non-const reference !.
+          if (!serializable<Backend, Type>::from_memory(reinterpret_cast<const char *>(serialized_data.data), size, ptr, std::forward<Params>(p)...))
             return nullptr;
 
           return ptr;
@@ -185,20 +189,12 @@ namespace neam
             /// \return true if successful
             static bool to_memory(memory_allocator &mem, size_t &size, const void *ptr)
             {
-              uint32_t whole_object_size = 0;
               bool res = true;
 
-              size_t sz = mem.size();
+              NEAM_EXECUTE_PACK((res &= to_memory_single<OffsetTypeList>(ptr, size, mem, res)));
 
-              NEAM_EXECUTE_PACK((res &= to_memory_single<OffsetTypeList>(ptr, whole_object_size, mem)));
-
-              // deallocate unused memory
               if (!res)
-              {
-                mem.pop(mem.size() - sz);
                 return false;
-              }
-              size = whole_object_size;
 
               return true;
             }
@@ -223,19 +219,17 @@ namespace neam
             }
 
             template<typename OffsetType>
-            static inline bool to_memory_single(const void *ptr, uint32_t &global_size, memory_allocator &mem)
+            static inline bool to_memory_single(const void *ptr, size_t &global_size, memory_allocator &mem, bool success)
             {
+              if (!success)
+                return false;
+
               size_t element_size = 0;
 
               uint32_t *size_memory = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-              if (!size_memory)
-                return false;
 
               if (!serializable<Backend, typename OffsetType::type>::to_memory(mem, element_size, reinterpret_cast<const typename OffsetType::type *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetType::offset)))
-              {
-                mem.pop(sizeof(uint32_t));
                 return false;
-              }
 
               *size_memory = element_size;
               global_size += element_size + sizeof(uint32_t);
@@ -259,9 +253,10 @@ namespace neam
             /// \param[in] size the size of the memory area
             /// \param[out] ptr a pointer to the object (the one that the function will fill)
             /// \return true if successful
-            static bool from_memory(const char *memory, size_t size, void *ptr)
+            template<typename... Params>
+            static bool from_memory(const char *memory, size_t size, void *ptr, Params &&... p)
             {
-              if (!serializable_object<Backend, OffsetTypeList...>::from_memory(memory, size, ptr))
+              if (!serializable_object<Backend, OffsetTypeList...>::from_memory(memory, size, ptr, std::forward<Params>(p)...))
                 return false;
 
               // call the constructor of the newly-initialized object (magic ?)
@@ -275,10 +270,11 @@ namespace neam
             /// \param[out] size the size of the memory area
             /// \param[in] ptr a pointer to the object (the one that the function will serialize)
             /// \return true if successful
-            static bool to_memory(memory_allocator &mem, size_t &size, const void *ptr)
+            template<typename... Params>
+            static bool to_memory(memory_allocator &mem, size_t &size, const void *ptr, Params &&... p)
             {
               // simply forward to serializable_object as we don't have to do anything here.
-              return serializable_object<Backend, OffsetTypeList...>::to_memory(mem, size, ptr);
+              return serializable_object<Backend, OffsetTypeList...>::to_memory(mem, size, ptr, std::forward<Params>(p)...);
             }
         };
 
@@ -286,10 +282,11 @@ namespace neam
 
 
         /// \see serializable_object
-        template<typename Type, size_t Offset>
+        template<typename Type, typename Object, size_t Offset>
         struct typed_offset
         {
           using type = Type;
+          using object = Object;
           constexpr static size_t offset = Offset;
         };
 
@@ -299,16 +296,16 @@ namespace neam
 /// \brief compute the type and the offset of the \e member of \e class
 /// \see class serializable_object
 /// \see class constructible_serializable_object
-#define NCRP_TYPED_OFFSET(class, member)                        neam::cr::persistence::typed_offset<decltype(class::member), N__OFFSETOF(class, member)>
+#define NCRP_TYPED_OFFSET(class, member)                        neam::cr::persistence::typed_offset<decltype(class::member), class, N__OFFSETOF(class, member)>
 /// \brief same as \b NCRP_TYPED_OFFSET, but the user also specify the type
-#define NCRP_OFFSET(type, class, member)                        neam::cr::persistence::typed_offset<type, N__OFFSETOF(class, member)>
+#define NCRP_OFFSET(type, class, member)                        neam::cr::persistence::typed_offset<type, class, N__OFFSETOF(class, member)>
 
 // G++ complain... :/
 // #define NCRP_TYPED_OFFSET(class, member)                 neam::cr::persistence::typed_offset<decltype(class::member), offsetof(class, member)>
 // #define NCRP_OFFSET(type, class, member)                 neam::cr::persistence::typed_offset<type, offsetof(class, member)>
 
 /// \brief like NCRP_TYPED_OFFSET, but surround the computed type with a wrapper (like \e checksum or \e magic)
-#define NCRP_WRAPPED_TYPED_OFFSET(class, member, wrapper, ...)  neam::cr::persistence::typed_offset<wrapper<decltype(class::member), ##__VAARGS__>, N__OFFSETOF(class, member)>
+#define NCRP_WRAPPED_TYPED_OFFSET(class, member, wrapper, ...)  neam::cr::persistence::typed_offset<wrapper<decltype(class::member), ##__VAARGS__>, class, N__OFFSETOF(class, member)>
 
         // no one could instanciate this class.
         // NO ONE.
@@ -320,7 +317,7 @@ namespace neam
 
 #include "serializable_specs_gen.hpp"
 #include "serializable_specs_neam.hpp"
-#include "serializable_specs_json.hpp"
+#include "serializable_specs_verbose.hpp"
 #include "serializable_wrappers.hpp"
 
 #endif /*__N_2006814652382068822_103083989__OBJECT_HPP__*/

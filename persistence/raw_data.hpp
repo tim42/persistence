@@ -39,7 +39,7 @@ namespace neam
     /// \attention this class use the ownership memory management model, and you should be very cautionary when using this class.
     struct raw_data
     {
-      uint32_t size;
+      size_t size;
       int8_t *data;
 
       bool ownership;

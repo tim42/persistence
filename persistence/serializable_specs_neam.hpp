@@ -46,7 +46,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, Type *ptr)
+        static inline bool from_memory(const char *memory, size_t size, Type *ptr)
         {
           if (size != sizeof(Type))
             return false;
@@ -59,7 +59,7 @@ namespace neam
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr)
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr)
         {
           size = sizeof(Type);
           char *memory = reinterpret_cast<char *>(mem.allocate(size));
@@ -71,21 +71,21 @@ namespace neam
     };
 
     // for arithmetic types
-    template<> class persistence::serializable<persistence_backend::neam, signed char> : public persistence::serializable<persistence_backend::neam, signed char, raw> {};
     template<> class persistence::serializable<persistence_backend::neam, char> : public persistence::serializable<persistence_backend::neam, char, raw> {};
     template<> class persistence::serializable<persistence_backend::neam, unsigned char> : public persistence::serializable<persistence_backend::neam, unsigned char, raw> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, signed short> : public persistence::serializable<persistence_backend::neam, signed short, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, short> : public persistence::serializable<persistence_backend::neam, short, raw> {};
     template<> class persistence::serializable<persistence_backend::neam, unsigned short> : public persistence::serializable<persistence_backend::neam, unsigned short, raw> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, signed int> : public persistence::serializable<persistence_backend::neam, signed int, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, int> : public persistence::serializable<persistence_backend::neam, int, raw> {};
     template<> class persistence::serializable<persistence_backend::neam, unsigned int> : public persistence::serializable<persistence_backend::neam, unsigned int, raw> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, signed long> : public persistence::serializable<persistence_backend::neam, signed long, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, long> : public persistence::serializable<persistence_backend::neam, long, raw> {};
     template<> class persistence::serializable<persistence_backend::neam, unsigned long> : public persistence::serializable<persistence_backend::neam, unsigned long, raw> {};
 
     template<> class persistence::serializable<persistence_backend::neam, float> : public persistence::serializable<persistence_backend::neam, float, raw> {};
     template<> class persistence::serializable<persistence_backend::neam, double> : public persistence::serializable<persistence_backend::neam, double, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, long double> : public persistence::serializable<persistence_backend::neam, long double, raw> {};
 
 
     template<>
@@ -97,7 +97,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, raw_data *ptr)
+        static inline bool from_memory(const char *memory, size_t size, raw_data *ptr)
         {
           if (size < sizeof(uint32_t))
             return false;
@@ -115,7 +115,7 @@ namespace neam
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const raw_data *ptr)
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const raw_data *ptr)
         {
           char *memory = reinterpret_cast<char *>(mem.allocate(ptr->size + sizeof(uint32_t)));
           if (!memory)
@@ -137,7 +137,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, char **ptr)
+        static inline bool from_memory(const char *memory, size_t size, char **ptr)
         {
           *ptr = reinterpret_cast<char *>(operator new(size + 1, std::nothrow));
           if (*ptr)
@@ -154,7 +154,7 @@ namespace neam
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
         /// \note the stored string doesn't have the null byte stored (as we store its size instead)
-        static bool to_memory(memory_allocator &mem, size_t &size, const char **ptr)
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const char **ptr)
         {
           size = strlen(*ptr);
           char *memory = reinterpret_cast<char *>(mem.allocate(size));
@@ -173,7 +173,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, std::pair<First, Second> *ptr)
+        static inline bool from_memory(const char *memory, size_t size, std::pair<First, Second> *ptr)
         {
           if (size < 2 * sizeof(uint32_t))
             return false;
@@ -187,7 +187,14 @@ namespace neam
             return false;
 
           bool ret = serializable<persistence_backend::neam, First>::from_memory(memory + sizeof(uint32_t), sz[0], &ptr->first);
+          if (!ret)
+            return false;
           ret &= serializable<persistence_backend::neam, Second>::from_memory(memory + 2 * sizeof(uint32_t) + sz[0], sz[1], &ptr->second);
+          if (!ret)
+          {
+            ptr->first.~First();
+            return false;
+          }
 
           return ret;
         }
@@ -197,28 +204,21 @@ namespace neam
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const std::pair<First, Second> *ptr)
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const std::pair<First, Second> *ptr)
         {
-          const size_t original_sz = mem.size();
           size_t sz[2] = {0, 0};
 
 
           uint32_t *sz_mem = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
           bool ret = serializable<persistence_backend::neam, First>::to_memory(mem, sz[0], &ptr->first);
           if (!ret)
-          {
-            mem.pop(mem.size() - original_sz);
             return false;
-          }
           *sz_mem = sz[0];
 
           sz_mem = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
           ret = serializable<persistence_backend::neam, Second>::to_memory(mem, sz[1], &ptr->second);
           if (!ret)
-          {
-            mem.pop(mem.size() - original_sz);
             return false;
-          }
           *sz_mem = sz[1];
 
           size = sz[0] + sz[1] + 2 * sizeof(uint32_t);
@@ -237,7 +237,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, neam::array_wrapper<Type> *ptr)
+        static inline bool from_memory(const char *memory, size_t size, neam::array_wrapper<Type> *ptr)
         {
           if (size < sizeof(uint32_t))
             return false;
@@ -286,31 +286,21 @@ namespace neam
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const neam::array_wrapper<Type> *ptr)
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const neam::array_wrapper<Type> *ptr)
         {
           uint32_t whole_object_size = sizeof(uint32_t);
-          bool res = true;
 
-          size_t original_sz = mem.size();
-
-          uint32_t *obj_count = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          if (!obj_count)
-            return false;
-          *obj_count = ptr->size;
+          *reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t))) = ptr->size;
 
           for (size_t index = 0; index < ptr->size; ++index)
           {
-            res &= to_memory_single(ptr->array + index, whole_object_size, mem);
-            if (!res)
-            {
-              mem.pop(mem.size() - original_sz);
+            if (!to_memory_single(ptr->array + index, whole_object_size, mem))
               return false;
-            }
           }
 
           size = whole_object_size;
 
-          return res;
+          return true;
         }
 
 
@@ -321,10 +311,7 @@ namespace neam
 
           uint32_t *size_memory = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
           if (!serializable<persistence_backend::neam, Type>::to_memory(mem, element_size, ptr))
-          {
-            mem.pop(sizeof(uint32_t));
             return false;
-          }
 
           *size_memory = element_size;
           global_size += element_size + sizeof(uint32_t);

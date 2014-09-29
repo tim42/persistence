@@ -53,7 +53,9 @@ class my_class
       }
     }
 
-    ~my_class() {}
+    ~my_class()
+    {
+    }
 
   private:
     /// \brief the post-deserialization function that will be called after deserializing the object
