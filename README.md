@@ -36,12 +36,16 @@ neam/persistence provides some "built-in" serializers for:
   - std::map
   - std::unordered_map
   - std::vector
-  - std::string
+  - std::basic_string (so `std::string` too, but not only)
+  - C arrays (`int m_int_array[500];`, including multi-dimensional arrays)
   - pointers (using dynamic allocation), and null pointers
   - a generic object serializer
   - neam::array_wrapper
   - neam::persistence::raw_data (almost like a `cr::array_wrapper`)
   - a default serializer that **dump** as-is the memory of the object
+
+For objects requesting it, a post-serialization function could be called after the serialization of the object has took place (and has been successful).
+(As the constructor won't be called, this is particularly useful. (the constructor won't be called because the compiler will default initialize all the fields, overwriting deserialized values))
 
 There is also some _wrappers_: _(a code that wrap the generated data and perform some actions)_
   - checksum (a custom, handcrafted, non-secure hashing function)
@@ -52,14 +56,19 @@ neam/persistence also provides a `storage` class that provide the ability to sto
 It supports different "backends", meaning that if you want to use a different backend, there is only one parameter to set, the compiler select the correct backend at compile time !
 Current backends:
   - neam (default)
+  - verbose _(serialization only)_ see what is serialized in an human readable format.
+    This backend could be usefull to print data easily (instead of manual `std::cout << ... << std::endl;`), to debug a possible problem with a serialized object,
+    and to see how neam::persistence works with some C++ types.
 
 ## performances
 
 Tests ran on an Intel i7, with g++ 4.8.3, in release mode:
   - serialization:
-    - **1.7 Gb/s** (size of the serialized data: 1.15 Gb)
+    - **780 Mb/s** (size of the serialized data: 1.15 Gb)
+    - **1.52 Gb/s** (size of the serialized data: 47.4 Ko)
   - deserialization:
-    - **2.3 Gb/s** (size of the serialized data: 1.15 Gb)
+    - **2.25 Gb/s** (size of the serialized data: 1.15 Gb)
+    - **1.52 Gb/s** (size of the serialized data: 47.4 Ko)
 
 This is fast, isn't it ?
 
@@ -134,6 +143,10 @@ namespace neam
 **NOTE:** constructors aren't called because the compiler will want to initialize **all** the members of your class
 and in the case of a post-deserialization, where members (possibly objects with dynamic allocation) have been already initialized,
 this would result in a massive memory leak and revert the object in a default state.
+
+**NOTE:** _[important note]_ : This function is mandatory if you have _complex_ (like `std::vector` or any other classes)
+types in your class and those members aren't part of the serialization process. You have to class the placement new operator on those members
+(example for a std::vector: `operator new(&m_int_vector) std::vector();`. This won't allocate memory, simply call the constructor of the object).
 
 ```C++
 // this is the struct your want to make serializable:
@@ -261,9 +274,11 @@ storage.write_to_file("exemple/object", *ptr);
 delete ptr;
 ```
 
-## future
-A JSON backend.
-Refactor the file `serializable_specs.hpp`.
+## future / TODO
+
+remove extra-copy (create the element in-place). (will be a lot faster on the deserialization benchmark).
+
+A XML backend.
 
 ## author
 Timothée Feuillet (_neam_ or _tim42_).
