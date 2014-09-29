@@ -23,11 +23,13 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-#ifndef __N_331927306113683385_1782336113__SERIALIZABLE_SPECS_JSON_HPP__
-# define __N_331927306113683385_1782336113__SERIALIZABLE_SPECS_JSON_HPP__
+#ifndef __N_331927306113683385_1782336113__SERIALIZABLE_SPECS_verbose_HPP__
+# define __N_331927306113683385_1782336113__SERIALIZABLE_SPECS_verbose_HPP__
 
 #include <type_traits>
+#include <string>
 #include <tools/array_wrapper.hpp>
+#include <tools/demangle.hpp>
 #include "object.hpp" // for my IDE
 #include "raw_data.hpp"
 
@@ -38,81 +40,84 @@ namespace neam
     namespace internal
     {
       struct numeric {};
+
+      namespace verbose
+      {
+        static inline bool _allocate_format_string(memory_allocator &mem, size_t &size, size_t indent_level, const std::string &type, const std::string &data)
+        {
+          std::string res;
+
+          // 4 spaces indentation with some lines
+          /*size_t i = 0;
+          for (; i < indent_level && i < indent_level - 1; ++i) res += "|   ";
+          for (; i < indent_level; ++i) res += "|---";*/
+
+          // two space indentation
+          for (size_t i = 0; i < indent_level; ++i) res += "  ";
+
+          res += type + ": ";
+          res += data + "\n";
+          void *d = mem.allocate(res.size());
+
+          if (d)
+          {
+            memcpy(d, res.data(), res.size());
+            size = res.size();
+            return true;
+          }
+          size = 0;
+          return false;
+        }
+
+        template<typename Type>
+        static inline bool _allocate_format_string(memory_allocator &mem, size_t &size, size_t indent_level, const std::string &data)
+        {
+          return _allocate_format_string(mem, size, indent_level, neam::demangle<Type>(), data);
+        }
+      } // namespace verbose
     } // namespace internal
 
 
     /// \brief the default serializer for the \e neam backend
     template<typename Type>
-    class persistence::serializable<persistence_backend::JSON, Type, internal::numeric>
+    class persistence::serializable<persistence_backend::verbose, Type, internal::numeric>
     {
       static_assert(std::is_arithmetic<Type>::value, "only arithmetic types here !!!");
       public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, Type *ptr)
-        {
-          if (size != sizeof(Type))
-            return false;
-          *ptr = *reinterpret_cast<const Type *>(memory);
-          return true;
-        }
 
         /// \brief serialize the object
         /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr)
+        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, size_t indent = 0)
         {
-          size = sizeof(Type);
-          char *memory = reinterpret_cast<char *>(mem.allocate(size));
-          if (!memory)
-            return false;
-          *reinterpret_cast<Type *>(memory) = *ptr;
-          return true;
+          return internal::verbose::_allocate_format_string<Type>(mem, size, indent, std::to_string(*ptr));
         }
     };
 
     // for arithmetic types
-    template<> class persistence::serializable<persistence_backend::JSON, signed char> : public persistence::serializable<persistence_backend::JSON, signed char, internal::numeric> {};
-    template<> class persistence::serializable<persistence_backend::JSON, char> : public persistence::serializable<persistence_backend::JSON, char, internal::numeric> {};
-    template<> class persistence::serializable<persistence_backend::JSON, unsigned char> : public persistence::serializable<persistence_backend::JSON, unsigned char, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, char> : public persistence::serializable<persistence_backend::verbose, char, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, unsigned char> : public persistence::serializable<persistence_backend::verbose, unsigned char, internal::numeric> {};
 
-    template<> class persistence::serializable<persistence_backend::JSON, signed short> : public persistence::serializable<persistence_backend::JSON, signed short, internal::numeric> {};
-    template<> class persistence::serializable<persistence_backend::JSON, unsigned short> : public persistence::serializable<persistence_backend::JSON, unsigned short, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, short> : public persistence::serializable<persistence_backend::verbose, short, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, unsigned short> : public persistence::serializable<persistence_backend::verbose, unsigned short, internal::numeric> {};
 
-    template<> class persistence::serializable<persistence_backend::JSON, signed int> : public persistence::serializable<persistence_backend::JSON, signed int, internal::numeric> {};
-    template<> class persistence::serializable<persistence_backend::JSON, unsigned int> : public persistence::serializable<persistence_backend::JSON, unsigned int, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, int> : public persistence::serializable<persistence_backend::verbose, int, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, unsigned int> : public persistence::serializable<persistence_backend::verbose, unsigned int, internal::numeric> {};
 
-    template<> class persistence::serializable<persistence_backend::JSON, signed long> : public persistence::serializable<persistence_backend::JSON, signed long, internal::numeric> {};
-    template<> class persistence::serializable<persistence_backend::JSON, unsigned long> : public persistence::serializable<persistence_backend::JSON, unsigned long, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, long> : public persistence::serializable<persistence_backend::verbose, long, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, unsigned long> : public persistence::serializable<persistence_backend::verbose, unsigned long, internal::numeric> {};
 
-    template<> class persistence::serializable<persistence_backend::JSON, float> : public persistence::serializable<persistence_backend::JSON, float, internal::numeric> {};
-    template<> class persistence::serializable<persistence_backend::JSON, double> : public persistence::serializable<persistence_backend::JSON, double, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, float> : public persistence::serializable<persistence_backend::verbose, float, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, double> : public persistence::serializable<persistence_backend::verbose, double, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::verbose, long double> : public persistence::serializable<persistence_backend::verbose, long double, internal::numeric> {};
 
     /// \brief a special case for C strings
     template<>
-    class persistence::serializable<persistence_backend::JSON, char *>
+    class persistence::serializable<persistence_backend::verbose, char *>
     {
       public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, char **ptr)
-        {
-          *ptr = reinterpret_cast<char *>(operator new(size + 1, std::nothrow));
-          if (*ptr)
-          {
-            memcpy(*ptr, memory, size);
-            (*ptr)[size] = 0;
-          }
-          return !!*ptr;
-        }
 
         /// \brief serialize the object
         /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
@@ -120,158 +125,81 @@ namespace neam
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
         /// \note the stored string doesn't have the null byte stored (as we store its size instead)
-        static bool to_memory(memory_allocator &mem, size_t &size, const char **ptr)
+        static bool to_memory(memory_allocator &mem, size_t &size, const char **ptr, size_t indent_level = 0)
         {
-          size = strlen(*ptr);
-          char *memory = reinterpret_cast<char *>(mem.allocate(size));
-          if (memory)
-            memcpy(memory, *ptr, size);
-          return !!memory;
+          if (!*ptr)
+            return internal::verbose::_allocate_format_string<char *>(mem, size, indent_level, "[nullptr]");
+          return internal::verbose::_allocate_format_string<char *>(mem, size, indent_level, "\"" + std::string(*ptr) + "\"");
         }
     };
 
     template<typename First, typename Second>
-    class persistence::serializable<persistence_backend::JSON, std::pair<First, Second>>
+    class persistence::serializable<persistence_backend::verbose, std::pair<First, Second>>
     {
       public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, std::pair<First, Second> *ptr)
-        {
-          if (size < 2 * sizeof(uint32_t))
-            return false;
-
-          uint32_t sz[2];
-          sz[0] = *reinterpret_cast<const uint32_t *>(memory);
-          if (size < sz[0] + 2 * sizeof(uint32_t))
-            return false;
-          sz[1] = *reinterpret_cast<const uint32_t *>(memory + sz[0] + sizeof(uint32_t));
-          if (size < sz[0] + 2 * sizeof(uint32_t) + sz[1])
-            return false;
-
-          bool ret = serializable<persistence_backend::JSON, First>::from_memory(memory + sizeof(uint32_t), sz[0], &ptr->first);
-          ret &= serializable<persistence_backend::JSON, Second>::from_memory(memory + 2 * sizeof(uint32_t) + sz[0], sz[1], &ptr->second);
-
-          return ret;
-        }
-
         /// \brief serialize the object
         /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const std::pair<First, Second> *ptr)
+        static bool to_memory(memory_allocator &mem, size_t &size, const std::pair<First, Second> *ptr, size_t indent_level = 0)
         {
-          const size_t original_sz = mem.size();
+          if (!internal::verbose::_allocate_format_string<std::pair<First, Second>>(mem, size, indent_level, ""))
+            return false;
           size_t sz[2] = {0, 0};
-
-
-          uint32_t *sz_mem = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          bool ret = serializable<persistence_backend::JSON, First>::to_memory(mem, sz[0], &ptr->first);
+          bool ret = serializable<persistence_backend::verbose, First>::to_memory(mem, sz[0], &ptr->first, indent_level + 1);
           if (!ret)
-          {
-            mem.pop(mem.size() - original_sz);
             return false;
-          }
-          *sz_mem = sz[0];
 
-          sz_mem = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          ret = serializable<persistence_backend::JSON, Second>::to_memory(mem, sz[1], &ptr->second);
+          ret = serializable<persistence_backend::verbose, Second>::to_memory(mem, sz[1], &ptr->second, indent_level + 1);
           if (!ret)
-          {
-            mem.pop(mem.size() - original_sz);
             return false;
-          }
-          *sz_mem = sz[1];
 
-          size = sz[0] + sz[1] + 2 * sizeof(uint32_t);
+          size += sz[0] + sz[1];
 
           return true;
+        }
+    };
+
+    template<>
+    class persistence::serializable<persistence_backend::verbose, raw_data>
+    {
+      public:
+        /// \brief serialize the object
+        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] size the size of the memory area
+        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
+        /// \return true if successful
+        static bool to_memory(memory_allocator &mem, size_t &size, const raw_data *ptr, size_t indent_level = 0)
+        {
+          if (!ptr->data)
+            return internal::verbose::_allocate_format_string<raw_data>(mem, size, indent_level, "size: " + std::to_string(ptr->size) + ": [nullptr]");
+          return internal::verbose::_allocate_format_string<raw_data>(mem, size, indent_level, "size: " + std::to_string(ptr->size) + ": [...] (stripped out binary data)");
         }
     };
 
     /// \brief serialize an array and all its elements
     template<typename Type>
-    class persistence::serializable<persistence_backend::JSON, neam::array_wrapper<Type>>
+    class persistence::serializable<persistence_backend::verbose, neam::array_wrapper<Type>>
     {
       public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, neam::array_wrapper<Type> *ptr)
-        {
-          if (size < sizeof(uint32_t))
-            return false;
-
-          ptr->size = *reinterpret_cast<const uint32_t *>(memory);
-          ptr->array = reinterpret_cast<Type *>(operator new(ptr->size * sizeof(Type), std::nothrow));
-
-          if (!ptr->array)
-            return false;
-
-          size_t offset = sizeof(uint32_t);
-          size_t index = 0;
-          for (; index < ptr->size; ++index)
-          {
-            if (offset + sizeof(uint32_t) > size)
-              break;
-
-            size_t elem_size = *reinterpret_cast<const uint32_t *>(memory + offset);
-            offset += sizeof(uint32_t);
-
-            if (offset + elem_size > size)
-              break;
-            if (!(serializable<persistence_backend::JSON, Type>::from_memory(memory + offset, elem_size, ptr->array + index)))
-              break;
-
-            offset += elem_size;
-          }
-
-          if (index != ptr->size)
-          {
-            // call destructors to free allocated memory...
-            for (size_t i = 0; i < index; ++i)
-            {
-              ptr->array[i].~Type();
-            }
-
-            delete reinterpret_cast<char *>(ptr->array);
-            return false;
-          }
-
-          return true;
-        }
-
         /// \brief serialize the object
         /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const neam::array_wrapper<Type> *ptr)
+        static bool to_memory(memory_allocator &mem, size_t &size, const neam::array_wrapper<Type> *ptr, size_t indent_level = 0)
         {
-          uint32_t whole_object_size = sizeof(uint32_t);
+          size_t whole_object_size = 0;
           bool res = true;
 
-          size_t original_sz = mem.size();
-
-          uint32_t *obj_count = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          if (!obj_count)
+          if (!internal::verbose::_allocate_format_string<Type[]>(mem, whole_object_size, indent_level, "[" + std::to_string(ptr->size) + "]"))
             return false;
-          *obj_count = ptr->size;
-
           for (size_t index = 0; index < ptr->size; ++index)
           {
-            res &= to_memory_single(ptr->array + index, whole_object_size, mem);
+            res &= to_memory_single(ptr->array + index, whole_object_size, mem, indent_level);
             if (!res)
-            {
-              mem.pop(mem.size() - original_sz);
               return false;
-            }
           }
 
           size = whole_object_size;
@@ -281,19 +209,65 @@ namespace neam
 
 
       private:
-        static inline bool to_memory_single(const Type *ptr, uint32_t &global_size, memory_allocator &mem)
+        static inline bool to_memory_single(const Type *ptr, size_t &global_size, memory_allocator &mem, size_t indent_level)
         {
           size_t element_size = 0;
 
-          uint32_t *size_memory = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          if (!serializable<persistence_backend::JSON, Type>::to_memory(mem, element_size, ptr))
-          {
-            mem.pop(sizeof(uint32_t));
+          if (!serializable<persistence_backend::verbose, Type>::to_memory(mem, element_size, ptr, indent_level + 1))
             return false;
+
+          global_size += element_size;
+          return true;
+        }
+    };
+
+    /// \brief this serialize complex objects (like classes)
+    /// this generate meta-data used to generate code that will fill the object.
+    /// \param OffsetTypeList is a list of \code typed_offset <type, offsetof(my_class, member)> \endcode that could be simplified with the macro \code NRP_TYPPED_OFFSET(my_class, member) \endcode
+    /// \note you still have to create a \code serializable \endcode specialization for the object, but you could simply use this trick: \code template<>class serializable<my_class> : public serializable_object<...> {}; \endcode
+    /// \see constructible_serializable_object
+    template<typename... OffsetTypeList>
+    class persistence::serializable_object<persistence_backend::verbose, OffsetTypeList...>
+    {
+      public:
+        /// \brief serialize the object
+        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] size the size of the memory area
+        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
+        /// \return true if successful
+        static bool to_memory(memory_allocator &mem, size_t &size, const void *ptr, size_t indent_level = 0)
+        {
+          size_t whole_object_size = 0;
+          bool res = true;
+
+          int count = 0;
+          NEAM_EXECUTE_PACK((res &= to_memory_single<OffsetTypeList>(ptr, whole_object_size, mem, indent_level, ++count)));
+
+          // deallocate unused memory
+          if (!res)
+            return false;
+          size = whole_object_size;
+
+          return true;
+        }
+
+      private:
+
+        template<typename OffsetType>
+        static inline bool to_memory_single(const void *ptr, size_t &global_size, memory_allocator &mem, size_t indent_level, int count)
+        {
+          size_t element_size = 0;
+
+          if (count == 1) // the first element, get the object type, print the header
+          {
+            if (!internal::verbose::_allocate_format_string<typename OffsetType::object>(mem, global_size, indent_level, "[" + std::to_string(sizeof...(OffsetTypeList)) + "]"))
+              return false;
           }
 
-          *size_memory = element_size;
-          global_size += element_size + sizeof(uint32_t);
+          if (!serializable<persistence_backend::verbose, typename OffsetType::type>::to_memory(mem, element_size, reinterpret_cast<const typename OffsetType::type *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetType::offset), indent_level + 1))
+            return false;
+
+          global_size += element_size;
           return true;
         }
     };
