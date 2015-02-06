@@ -60,6 +60,7 @@ class my_class
     int s_int;
     double s_double;
     float s_float;
+    bool s_bool = true;
 
     neam::cr::raw_data *s_data;
     float my_array[3][2] = {{13.f, 55.550054f}, {-.00013f, 15.f}, {1e6f, 1.550e-10f}};
@@ -82,6 +83,7 @@ namespace neam
     NCRP_DECLARE_NAME(my_class, s_int);
     NCRP_DECLARE_NAME(my_class, s_double);
     NCRP_DECLARE_NAME(my_class, s_float);
+    NCRP_DECLARE_NAME(my_class, s_bool);
     NCRP_DECLARE_NAME(my_class, s_data);
     NCRP_DECLARE_NAME(my_class, my_nullptr);
     NCRP_DECLARE_NAME(my_class, my_array);
@@ -94,6 +96,7 @@ namespace neam
       NCRP_NAMED_TYPED_OFFSET(my_class, s_int, names::my_class::s_int),
       NCRP_NAMED_TYPED_OFFSET(my_class, s_double, names::my_class::s_double),
       NCRP_NAMED_TYPED_OFFSET(my_class, s_float, names::my_class::s_float),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_bool, names::my_class::s_bool),
       NCRP_NAMED_TYPED_OFFSET(my_class, s_data, names::my_class::s_data),
       NCRP_NAMED_TYPED_OFFSET(my_class, my_nullptr, names::my_class::my_nullptr), // won't appear in the serialization output ;)
       NCRP_NAMED_TYPED_OFFSET(my_class, my_array, names::my_class::my_array),
