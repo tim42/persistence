@@ -56,6 +56,11 @@ namespace neam
       struct verbose {}; // a verbose backend (serialization only)
     } // namespace persitence_backend
 
+    namespace internal
+    {
+      extern constexpr neam::string_t empty_name = "";
+    } // namespace internal
+
     struct raw {};
 
     /// \brief a way to now if your constructor is called from the serialization process
@@ -282,12 +287,13 @@ namespace neam
 
 
         /// \see serializable_object
-        template<typename Type, typename Object, size_t Offset>
+        template<typename Type, typename Object, size_t Offset, const char *Name = nullptr>
         struct typed_offset
         {
           using type = Type;
           using object = Object;
           constexpr static size_t offset = Offset;
+          constexpr static const char *name = Name;
         };
 
 /// \brief this is quite "crade", isn't it ?? (this is the version with a pointer to member of the so famous C macro)
@@ -297,8 +303,21 @@ namespace neam
 /// \see class serializable_object
 /// \see class constructible_serializable_object
 #define NCRP_TYPED_OFFSET(class, member)                        neam::cr::persistence::typed_offset<decltype(class::member), class, N__OFFSETOF(class, member)>
+
+/// \brief same as \b NCRP_TYPED_OFFSET, but the user also specify the name
+/// \note \p name MUST be a (extern) constexpr neam::string_t variable !
+#define NCRP_NAMED_TYPED_OFFSET(class, member, name)            neam::cr::persistence::typed_offset<decltype(class::member), class, N__OFFSETOF(class, member), name>
+
 /// \brief same as \b NCRP_TYPED_OFFSET, but the user also specify the type
 #define NCRP_OFFSET(type, class, member)                        neam::cr::persistence::typed_offset<type, class, N__OFFSETOF(class, member)>
+
+/// \brief same as \b NCRP_OFFSET, but the user also specify the name of the field
+/// \note \p name MUST be a (extern) constexpr neam::string_t variable !
+#define NCRP_NAMED_OFFSET(type, class, member, name)            neam::cr::persistence::typed_offset<type, class, N__OFFSETOF(class, member), name>
+
+/// \brief declare a variable that will hold the name of the field
+/// \note be careful with the namespaces !
+#define NCRP_DECLARE_NAME(class, name)                          namespace names{namespace class{ extern constexpr neam::string_t name __attribute__((used)) = #name; }}
 
 // G++ complain... :/
 // #define NCRP_TYPED_OFFSET(class, member)                 neam::cr::persistence::typed_offset<decltype(class::member), offsetof(class, member)>

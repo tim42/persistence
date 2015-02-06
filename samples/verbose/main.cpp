@@ -8,6 +8,10 @@
 
 #include <persistence/persistence.hpp>
 
+// constexpr const char *_to_tpl_str(const char *str) { return str; }
+// template<const char *T> struct str_tst {};
+// using ebd_str = str_tst<(const char *)_to_tpl_str("coucou")>;
+
 /// \brief create a random string
 static inline std::string random_string(size_t min_len = 5)
 {
@@ -75,28 +79,38 @@ namespace neam
 {
   namespace cr
   {
+    NCRP_DECLARE_NAME(my_class, s_int);
+    NCRP_DECLARE_NAME(my_class, s_double);
+    NCRP_DECLARE_NAME(my_class, s_float);
+    NCRP_DECLARE_NAME(my_class, s_data);
+    NCRP_DECLARE_NAME(my_class, my_nullptr);
+    NCRP_DECLARE_NAME(my_class, my_array);
+    NCRP_DECLARE_NAME(my_class, s_map);
     template<typename Backend> class persistence::serializable<Backend, my_class> : public persistence::serializable_object
     <
       Backend, // < the backend (here: all backends)
 
       // simply list here the members you want to serialize / deserialize
-      NCRP_TYPED_OFFSET(my_class, s_int),
-      NCRP_TYPED_OFFSET(my_class, s_double),
-      NCRP_TYPED_OFFSET(my_class, s_float),
-      NCRP_TYPED_OFFSET(my_class, s_data),
-      NCRP_TYPED_OFFSET(my_class, my_nullptr), // won't appear in the serialization output ;)
-      NCRP_TYPED_OFFSET(my_class, my_array),
-      NCRP_TYPED_OFFSET(my_class, s_map)
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_int, names::my_class::s_int),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_double, names::my_class::s_double),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_float, names::my_class::s_float),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_data, names::my_class::s_data),
+      NCRP_NAMED_TYPED_OFFSET(my_class, my_nullptr, names::my_class::my_nullptr), // won't appear in the serialization output ;)
+      NCRP_NAMED_TYPED_OFFSET(my_class, my_array, names::my_class::my_array),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_map, names::my_class::s_map)
     > {};
 
+    NCRP_DECLARE_NAME(my_struct, s_int);
+    NCRP_DECLARE_NAME(my_struct, s_string);
+    NCRP_DECLARE_NAME(my_struct, s_vector);
     template<typename Backend> class persistence::serializable<Backend, my_struct> : public persistence::serializable_object
     <
       Backend, // < the backend (here: all backends)
 
       // simply list here the members you want to serialize / deserialize
-      NCRP_TYPED_OFFSET(my_struct, s_int),
-      NCRP_TYPED_OFFSET(my_struct, s_string),
-      NCRP_TYPED_OFFSET(my_struct, s_vector)
+      NCRP_NAMED_TYPED_OFFSET(my_struct, s_int, names::my_struct::s_int),
+      NCRP_NAMED_TYPED_OFFSET(my_struct, s_string, names::my_struct::s_string),
+      NCRP_NAMED_TYPED_OFFSET(my_struct, s_vector, names::my_struct::s_vector)
     > {};
   } // namespace cr
 } // namespace neam

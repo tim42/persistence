@@ -43,42 +43,60 @@ namespace neam
 
       namespace verbose
       {
-        static inline bool _allocate_format_string(memory_allocator &mem, size_t &size, size_t indent_level, const std::string &type, const std::string &data)
+        static inline bool _allocate_string(memory_allocator &mem, size_t &size, size_t indent_level, const std::string &data)
         {
-          std::string res;
-
-          // 4 spaces indentation with some lines
-          /*size_t i = 0;
-          for (; i < indent_level && i < indent_level - 1; ++i) res += "|   ";
-          for (; i < indent_level; ++i) res += "|---";*/
-
-          // two space indentation
-          for (size_t i = 0; i < indent_level; ++i) res += "  ";
-
-          res += type + ": ";
-          res += data + "\n";
-          void *d = mem.allocate(res.size());
+          void *d = mem.allocate(indent_level * 2 + data.size());
 
           if (d)
           {
-            memcpy(d, res.data(), res.size());
-            size = res.size();
+            size_t i = 0;
+            for (; i < indent_level * 2; ++i) ((char *)d)[i] = ' ';
+
+            memcpy((char *)d + i, data.data(), data.size());
+            size += data.size();
             return true;
           }
-          size = 0;
+          size += 0;
           return false;
         }
 
-        template<typename Type>
-        static inline bool _allocate_format_string(memory_allocator &mem, size_t &size, size_t indent_level, const std::string &data)
+        static inline bool _allocate_format_string(memory_allocator &mem, size_t &size, size_t indent_level, const std::string &type, const char *name, const std::string &data)
         {
-          return _allocate_format_string(mem, size, indent_level, neam::demangle<Type>(), data);
+          std::string res = type + " " + std::string(name ? name : "") + " = ";
+          res += data + "\n";
+
+          return _allocate_string(mem, size, indent_level, res);
+        }
+
+        template<typename Type>
+        static inline bool _allocate_format_string(memory_allocator &mem, size_t &size, size_t indent_level, const char *name, const std::string &data)
+        {
+          return _allocate_format_string(mem, size, indent_level, neam::demangle<Type>(), name, data);
         }
       } // namespace verbose
     } // namespace internal
 
+    /// \brief boolean serializer
+    template<>
+    class persistence::serializable<persistence_backend::verbose, bool>
+    {
+      public:
 
-    /// \brief the default serializer for the \e neam backend
+        /// \brief serialize the object
+        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] size the size of the memory area
+        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
+        /// \return true if successful
+        static bool to_memory(memory_allocator &mem, size_t &size, const bool *ptr, size_t indent = 0, const char *name = nullptr)
+        {
+          if (*ptr)
+            return internal::verbose::_allocate_format_string<bool>(mem, size, indent, name, "true");
+          else
+            return internal::verbose::_allocate_format_string<bool>(mem, size, indent, name, "false");
+        }
+    };
+
+    /// \brief the default serializer for numeric types
     template<typename Type>
     class persistence::serializable<persistence_backend::verbose, Type, internal::numeric>
     {
@@ -90,9 +108,9 @@ namespace neam
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, size_t indent = 0)
+        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, size_t indent = 0, const char *name = nullptr)
         {
-          return internal::verbose::_allocate_format_string<Type>(mem, size, indent, std::to_string(*ptr));
+          return internal::verbose::_allocate_format_string<Type>(mem, size, indent, name, std::to_string(*ptr));
         }
     };
 
@@ -125,11 +143,11 @@ namespace neam
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
         /// \note the stored string doesn't have the null byte stored (as we store its size instead)
-        static bool to_memory(memory_allocator &mem, size_t &size, const char **ptr, size_t indent_level = 0)
+        static bool to_memory(memory_allocator &mem, size_t &size, const char **ptr, size_t indent_level = 0, const char *name = nullptr)
         {
           if (!*ptr)
-            return internal::verbose::_allocate_format_string<char *>(mem, size, indent_level, "[nullptr]");
-          return internal::verbose::_allocate_format_string<char *>(mem, size, indent_level, "\"" + std::string(*ptr) + "\"");
+            return internal::verbose::_allocate_format_string<char *>(mem, size, indent_level, name, "[nullptr]");
+          return internal::verbose::_allocate_format_string<char *>(mem, size, indent_level, name, "\"" + std::string(*ptr) + "\"");
         }
     };
 
@@ -142,20 +160,23 @@ namespace neam
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const std::pair<First, Second> *ptr, size_t indent_level = 0)
+        static bool to_memory(memory_allocator &mem, size_t &size, const std::pair<First, Second> *ptr, size_t indent_level = 0, const char *name = nullptr)
         {
-          if (!internal::verbose::_allocate_format_string<std::pair<First, Second>>(mem, size, indent_level, ""))
+          if (!internal::verbose::_allocate_format_string<std::pair<First, Second>>(mem, size, indent_level, name, ""))
             return false;
-          size_t sz[2] = {0, 0};
-          bool ret = serializable<persistence_backend::verbose, First>::to_memory(mem, sz[0], &ptr->first, indent_level + 1);
+          if (!internal::verbose::_allocate_string(mem, size, indent_level, "{\n"))
+            return false;
+
+          bool ret = serializable<persistence_backend::verbose, First>::to_memory(mem, size, &ptr->first, indent_level + 1, "first");
           if (!ret)
             return false;
 
-          ret = serializable<persistence_backend::verbose, Second>::to_memory(mem, sz[1], &ptr->second, indent_level + 1);
+          ret = serializable<persistence_backend::verbose, Second>::to_memory(mem, size, &ptr->second, indent_level + 1, "second");
           if (!ret)
             return false;
 
-          size += sz[0] + sz[1];
+          if (!internal::verbose::_allocate_string(mem, size, indent_level, "}\n"))
+            return false;
 
           return true;
         }
@@ -170,11 +191,11 @@ namespace neam
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const raw_data *ptr, size_t indent_level = 0)
+        static bool to_memory(memory_allocator &mem, size_t &size, const raw_data *ptr, size_t indent_level = 0, const char *name = nullptr)
         {
           if (!ptr->data)
-            return internal::verbose::_allocate_format_string<raw_data>(mem, size, indent_level, "size: " + std::to_string(ptr->size) + ": [nullptr]");
-          return internal::verbose::_allocate_format_string<raw_data>(mem, size, indent_level, "size: " + std::to_string(ptr->size) + ": [...] (stripped out binary data)");
+            return internal::verbose::_allocate_format_string<raw_data>(mem, size, indent_level, name, "size: " + std::to_string(ptr->size) + ": [nullptr]");
+          return internal::verbose::_allocate_format_string<raw_data>(mem, size, indent_level, name, "size: " + std::to_string(ptr->size) + ": [...] (stripped out binary data)");
         }
     };
 
@@ -188,19 +209,26 @@ namespace neam
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const neam::array_wrapper<Type> *ptr, size_t indent_level = 0)
+        static bool to_memory(memory_allocator &mem, size_t &size, const neam::array_wrapper<Type> *ptr, size_t indent_level = 0, const char *name = nullptr)
         {
           size_t whole_object_size = 0;
           bool res = true;
 
-          if (!internal::verbose::_allocate_format_string<Type[]>(mem, whole_object_size, indent_level, "[" + std::to_string(ptr->size) + "]"))
+          if (!internal::verbose::_allocate_format_string<Type[]>(mem, whole_object_size, indent_level, name, "// [" + std::to_string(ptr->size) + "]"))
             return false;
+
+          if (!internal::verbose::_allocate_string(mem, size, indent_level, "{\n"))
+            return false;
+
           for (size_t index = 0; index < ptr->size; ++index)
           {
-            res &= to_memory_single(ptr->array + index, whole_object_size, mem, indent_level);
+            res &= to_memory_single(ptr->array + index, whole_object_size, mem, indent_level, nullptr);
             if (!res)
               return false;
           }
+
+          if (!internal::verbose::_allocate_string(mem, size, indent_level, "}\n"))
+            return false;
 
           size = whole_object_size;
 
@@ -209,11 +237,11 @@ namespace neam
 
 
       private:
-        static inline bool to_memory_single(const Type *ptr, size_t &global_size, memory_allocator &mem, size_t indent_level)
+        static inline bool to_memory_single(const Type *ptr, size_t &global_size, memory_allocator &mem, size_t indent_level, const char *name)
         {
           size_t element_size = 0;
 
-          if (!serializable<persistence_backend::verbose, Type>::to_memory(mem, element_size, ptr, indent_level + 1))
+          if (!serializable<persistence_backend::verbose, Type>::to_memory(mem, element_size, ptr, indent_level + 1, name))
             return false;
 
           global_size += element_size;
@@ -235,13 +263,13 @@ namespace neam
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const void *ptr, size_t indent_level = 0)
+        static bool to_memory(memory_allocator &mem, size_t &size, const void *ptr, size_t indent_level = 0, const char *name = nullptr)
         {
           size_t whole_object_size = 0;
           bool res = true;
 
           int count = 0;
-          NEAM_EXECUTE_PACK((res &= to_memory_single<OffsetTypeList>(ptr, whole_object_size, mem, indent_level, ++count)));
+          NEAM_EXECUTE_PACK((res &= to_memory_single<OffsetTypeList>(ptr, whole_object_size, mem, indent_level, name, ++count)));
 
           // deallocate unused memory
           if (!res)
@@ -254,18 +282,26 @@ namespace neam
       private:
 
         template<typename OffsetType>
-        static inline bool to_memory_single(const void *ptr, size_t &global_size, memory_allocator &mem, size_t indent_level, int count)
+        static inline bool to_memory_single(const void *ptr, size_t &global_size, memory_allocator &mem, size_t indent_level, const char *name, int count)
         {
           size_t element_size = 0;
 
           if (count == 1) // the first element, get the object type, print the header
           {
-            if (!internal::verbose::_allocate_format_string<typename OffsetType::object>(mem, global_size, indent_level, "[" + std::to_string(sizeof...(OffsetTypeList)) + "]"))
-              return false;
+              if (!internal::verbose::_allocate_format_string<typename OffsetType::object>(mem, global_size, indent_level, name, "// [" + std::to_string(sizeof...(OffsetTypeList)) + "]"))
+                return false;
+              if (!internal::verbose::_allocate_string(mem, global_size, indent_level, "{\n"))
+                return false;
           }
 
-          if (!serializable<persistence_backend::verbose, typename OffsetType::type>::to_memory(mem, element_size, reinterpret_cast<const typename OffsetType::type *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetType::offset), indent_level + 1))
+          if (!serializable<persistence_backend::verbose, typename OffsetType::type>::to_memory(mem, element_size, reinterpret_cast<const typename OffsetType::type *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetType::offset), indent_level + 1, OffsetType::name))
             return false;
+
+          if (count == sizeof...(OffsetTypeList))
+          {
+            if (!internal::verbose::_allocate_string(mem, global_size, indent_level, "}\n"))
+                return false;
+          }
 
           global_size += element_size;
           return true;
