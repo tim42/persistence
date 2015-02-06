@@ -324,7 +324,7 @@ namespace neam
 // #define NCRP_OFFSET(type, class, member)                 neam::cr::persistence::typed_offset<type, offsetof(class, member)>
 
 /// \brief like NCRP_TYPED_OFFSET, but surround the computed type with a wrapper (like \e checksum or \e magic)
-#define NCRP_WRAPPED_TYPED_OFFSET(class, member, wrapper, ...)  neam::cr::persistence::typed_offset<wrapper<decltype(class::member), ##__VAARGS__>, class, N__OFFSETOF(class, member)>
+#define NCRP_WRAPPED_TYPED_OFFSET(class, member, wrapper, ...)  neam::cr::persistence::typed_offset<wrapper<decltype(class::member), ##__VA_ARGS__>, class, N__OFFSETOF(class, member)>
 
         // no one could instanciate this class.
         // NO ONE.
