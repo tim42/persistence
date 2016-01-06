@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <map>
-#include <iostream>
+#include <tools/logger/logger.hpp>
 
 #include <persistence/persistence.hpp>
 
@@ -18,7 +18,8 @@ class my_class
 
     void print(const std::string &str) const
     {
-      std::cout << str << " my_class: [s_int: " << s_int << ", s_double: " << s_double << ", s_float: " << s_float << ", i: " << i << "]" << std::endl;
+      neam::cr::out.log() << LOGGER_INFO << str << neam::cr::newline
+                          << "   my_class: [s_int: " << s_int << ", s_double: " << s_double << ", s_float: " << s_float << ", i: " << i << "]" << std::endl;
     }
 
     void increment()
@@ -28,7 +29,7 @@ class my_class
 
   private:
     /// \brief the function that will be called when deserializing the object
-    void post_deserialization(int _i, neam::cr::from_serialization_t)
+    void post_deserialization(int _i)
     {
       i = _i;
     }
@@ -55,7 +56,7 @@ namespace neam
 
       // Embed in the template a call to the post-deserialization function
       // This function will be called just after the object has been deserialized
-      N_CALL_POST_FUNCTION(my_class, N_EMBED(42), neam::cr::from_serialization),
+      N_CALL_POST_FUNCTION(my_class, N_EMBED(42)),
 
       // simply list here the members you want to serialize / deserialize
       NCRP_TYPED_OFFSET(my_class, s_int),
@@ -69,7 +70,7 @@ namespace neam
 void init_storage(neam::cr::storage &storage)
 {
   my_class my_instance(13, 42.00000042, 4.2e-5, 0);
-  my_instance.print("original:\n  ");
+  my_instance.print("original:");
 
   storage.write_to_file("sample/storage/instance", my_instance);
 }
@@ -79,13 +80,17 @@ int main()
   neam::cr::storage storage("samples.storage");
 
   if (!storage.is_valid() || !storage.contains("sample/storage/instance"))
+  {
+    if (!storage.is_valid())
+            neam::cr::out.error() << LOGGER_INFO << "Storage in invalid state: reset" << std::endl;
     init_storage(storage);
+  }
 
   // deserialize stored data:
   my_class *ptr = storage.load_from_file<my_class>("sample/storage/instance");
   if (!ptr)
   {
-    std::cerr << "Invalid data: reset 'sample/storage/instance'" << std::endl;
+    neam::cr::out.error() << LOGGER_INFO << "Invalid data: reset 'sample/storage/instance'" << std::endl;
 
     // re-init the storage with a valid value
     init_storage(storage);
@@ -96,12 +101,12 @@ int main()
     // should never happen
     if (!ptr)
     {
-      std::cerr << "Unable to retrieve valid data... :(" << std::endl;
+      neam::cr::out.error() << LOGGER_INFO << "Unable to retrieve valid data... :(" << std::endl;
       return 1;
     }
   }
 
-  ptr->print("deserialized:\n  ");
+  ptr->print("deserialized:");
   ptr->increment();
 
   // update it:

@@ -38,7 +38,7 @@ class my_class
 
   private:
     /// \brief the function that will be called when deserializing the object
-    void post_deserialization(int _i, neam::cr::from_serialization_t)
+    void post_deserialization(int _i)
     {
       i = _i;
     }
@@ -67,7 +67,7 @@ namespace neam
 
       // Embed in the template a call to the post-deserialization function
       // This function will be called just after the object has been deserialized
-      N_CALL_POST_FUNCTION(my_class, N_EMBED(42), neam::cr::from_serialization),
+      N_CALL_POST_FUNCTION(my_class, N_EMBED(42)),
 
       // simply list here the members you want to serialize / deserialize
       NCRP_TYPED_OFFSET(my_class, s_int),

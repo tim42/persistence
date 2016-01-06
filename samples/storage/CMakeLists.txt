@@ -16,6 +16,6 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${PROJ_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${PROJ_FLAGS}")
 
 add_executable(${SAMPLE_NAME} ${srcs})
-target_link_libraries(${SAMPLE_NAME} ${PROJ_APP})
+target_link_libraries(${SAMPLE_NAME} ${PROJ_APP} ${libntools})
 
 
