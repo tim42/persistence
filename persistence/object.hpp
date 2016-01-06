@@ -49,25 +49,13 @@ namespace neam
   namespace cr
   {
 
-    /// \brief the list of defaulty availaible backend
+    /// \brief the list of defaultly available backend
     namespace persistence_backend
     {
-      struct neam {}; // default and faster.
+      struct neam {}; // the "default" and faster backend.
       struct verbose {}; // a verbose backend (serialization only)
+      struct json {};    // a JSON backend (serialization only, TODO: deserialization)
     } // namespace persitence_backend
-
-    namespace internal
-    {
-      extern constexpr neam::string_t empty_name = "";
-    } // namespace internal
-
-    struct raw {};
-
-    /// \brief a way to now if your constructor is called from the serialization process
-    struct from_serialization_t {constexpr from_serialization_t() {}};
-
-    /// \brief this type could be used directly in a N_CALL_CONSTRUCTOR or a subsequent call o N_EMBED_OBJECT
-    using from_serialization = N_EMBED_OBJECT(from_serialization_t);
 
     /// \brief serialize data
     /// originally the class persistence was a namespace, but this caused some problems with private members
@@ -147,6 +135,15 @@ namespace neam
                 return false;
               *ptr = *reinterpret_cast<const Type *>(memory);
               return true;
+            }
+
+            /// \brief deserialize the object and return it
+            /// \param[in,out] mem the allocator used to allocate the object
+            /// \return *ptr. always.
+            template<typename... Params>
+            static inline const Type &from_memory(memory_allocator &mem)
+            {
+              return *reinterpret_cast<Type *>(mem.allocate(1)); // always hits the cache
             }
 
             /// \brief serialize the object
@@ -252,6 +249,9 @@ namespace neam
         template<typename Backend, typename ConstructorCall, typename... OffsetTypeList>
         class constructible_serializable_object
         {
+          private:
+            using object_t = typename neam::ct::type_at_index<0, OffsetTypeList...>::type;
+
           public:
             /// \brief deserialize the object
             /// \param[in] memory the serialized object
@@ -268,6 +268,20 @@ namespace neam
               ConstructorCall::forward_to(reinterpret_cast<typename ConstructorCall::type *>(ptr), &ConstructorCall::type::post_deserialization);
 
               return true;
+            }
+
+            /// \brief deserialize the object and return it
+            /// \param[in,out] mem the allocator used to allocate the object
+            /// \return *ptr. always.
+            template<typename... Params>
+            static inline object_t &from_memory(memory_allocator &mem, Params && ... p)
+            {
+              object_t &ref = serializable<Backend, OffsetTypeList...>::from_memory(mem, std::forward<Params>(p)...);
+
+              // call the constructor of the newly-initialized object (magic ?)
+              ConstructorCall::forward_to(reinterpret_cast<typename ConstructorCall::type *>(&ref), &ConstructorCall::type::post_deserialization);
+
+              return ref;
             }
 
             /// \brief serialize the object
@@ -287,37 +301,59 @@ namespace neam
 
 
         /// \see serializable_object
-        template<typename Type, typename Object, size_t Offset, const char *Name = nullptr>
+        /// \note \p OffsetIsAbsolute is used to determine whether or not the offset is relative to the this pointer or absolute.
+        template<typename Type, typename Object, size_t Offset, const char *Name = nullptr, bool AbsoluteOffset = false>
         struct typed_offset
         {
           using type = Type;
           using object = Object;
           constexpr static size_t offset = Offset;
           constexpr static const char *name = Name;
+          constexpr static bool absolute_offset = AbsoluteOffset;
         };
 
 /// \brief this is quite "crade", isn't it ?? (this is the version with a pointer to member of the so famous C macro)
 #define N__OFFSETOF(class, member)                              reinterpret_cast<size_t>(&(reinterpret_cast<class *>(0)->member))
 
+/// \brief an helper for template classes (that CPP doesn't like as macro argument...)
+#ifdef IN_IDE_PARSER // sorry :(
+// only in the IDE, in order to keep syntactic coloration working...
+#define NCRP_TEMPLATE_CLASS(...)                                neam::cr::persistence
+#else
+// this one is for the C++ compiler
+#define NCRP_TEMPLATE_CLASS(...)                                decltype(__VA_ARGS__(/*...*/))
+#endif
 /// \brief compute the type and the offset of the \e member of \e class
 /// \see class serializable_object
 /// \see class constructible_serializable_object
 #define NCRP_TYPED_OFFSET(class, member)                        neam::cr::persistence::typed_offset<decltype(class::member), class, N__OFFSETOF(class, member)>
 
+/// \brief same as \b NCRP_TYPED_OFFSET, but with an absolute offset (not relative to a this pointer. For static properties and member methods).
+#define NCRP_TYPED_ABSOLUTE_OFFSET(class, member)               neam::cr::persistence::typed_offset<decltype(class::member), class, N__OFFSETOF(class, member), true>
+
 /// \brief same as \b NCRP_TYPED_OFFSET, but the user also specify the name
 /// \note \p name MUST be a (extern) constexpr neam::string_t variable !
 #define NCRP_NAMED_TYPED_OFFSET(class, member, name)            neam::cr::persistence::typed_offset<decltype(class::member), class, N__OFFSETOF(class, member), name>
 
+/// \brief same as \b NCRP_NAMED_TYPED_OFFSET, but with an absolute offset (not relative to a this pointer. For static properties and member methods).
+#define NCRP_NAMED_TYPED_ABSOLUTE_OFFSET(class, member, name)   neam::cr::persistence::typed_offset<decltype(class::member), class, N__OFFSETOF(class, member), name, true>
+
 /// \brief same as \b NCRP_TYPED_OFFSET, but the user also specify the type
 #define NCRP_OFFSET(type, class, member)                        neam::cr::persistence::typed_offset<type, class, N__OFFSETOF(class, member)>
+
+/// \brief same as \b NCRP_OFFSET, but with an absolute offset (not relative to a this pointer. For static properties and member methods).
+#define NCRP_ABSOLUTE_OFFSET(type, class, member)               neam::cr::persistence::typed_offset<type, class, N__OFFSETOF(class, member), nullptr, true>
 
 /// \brief same as \b NCRP_OFFSET, but the user also specify the name of the field
 /// \note \p name MUST be a (extern) constexpr neam::string_t variable !
 #define NCRP_NAMED_OFFSET(type, class, member, name)            neam::cr::persistence::typed_offset<type, class, N__OFFSETOF(class, member), name>
 
+/// \brief same as \b NCRP_NAMED_OFFSET, but with an absolute offset (not relative to a this pointer. For static properties and member methods).
+#define NCRP_NAMED_ABSOLUTE_OFFSET(type, class, member, name)   neam::cr::persistence::typed_offset<type, class, N__OFFSETOF(class, member), name, true>
+
 /// \brief declare a variable that will hold the name of the field
 /// \note be careful with the namespaces !
-#define NCRP_DECLARE_NAME(class, name)                          namespace names{namespace class{ extern constexpr neam::string_t name __attribute__((used)) = #name; }}
+#define NCRP_DECLARE_NAME(class, name)                          namespace names{namespace class{ constexpr neam::string_t name __attribute__((used)) = #name; }}
 
 // G++ complain... :/
 // #define NCRP_TYPED_OFFSET(class, member)                 neam::cr::persistence::typed_offset<decltype(class::member), offsetof(class, member)>
@@ -331,12 +367,18 @@ namespace neam
         persistence() = delete;
         ~persistence() = delete;
     }; // class persistence
+
+    // TODO: find a better alternative to this...
+    template<typename Type, typename Object, size_t Offset, const char *Name, bool AbsoluteOffset>
+    constexpr const char *persistence::typed_offset<Type, Object, Offset, Name, AbsoluteOffset>::name;
+
   } // namespace cr
 } // namespace neam
 
 #include "serializable_specs_gen.hpp"
 #include "serializable_specs_neam.hpp"
 #include "serializable_specs_verbose.hpp"
+#include "serializable_specs_json.hpp"
 #include "serializable_wrappers.hpp"
 
 #endif /*__N_2006814652382068822_103083989__OBJECT_HPP__*/

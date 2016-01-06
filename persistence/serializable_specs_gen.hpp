@@ -55,6 +55,15 @@ namespace neam
           return serializable<Backend, Type>::from_memory(memory, size, const_cast<Type *>(ptr), std::forward<Params>(p)...);
         }
 
+        /// \brief deserialize the object and return it
+        /// \param[in,out] mem the allocator used to allocate the object
+        /// \return *ptr. always.
+        template<typename... Params>
+        static inline const Type &from_memory(memory_allocator &mem, Params &&... p)
+        {
+          return serializable<Backend, Type>::from_memory(mem, std::forward<Params>(p)...);
+        }
+
         /// \brief serialize the object
         /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
         /// \param[out] size the size of the memory area
@@ -82,6 +91,15 @@ namespace neam
           return serializable<Backend, Type>::from_memory(memory, size, reinterpret_cast<Type *>(ptr), std::forward<Params>(p)...);
         }
 
+        /// \brief deserialize the object and return it
+        /// \param[in,out] mem the allocator used to allocate the object
+        /// \return *ptr. always.
+        template<typename... Params>
+        static inline volatile Type &from_memory(memory_allocator &mem, Params &&... p)
+        {
+          return serializable<Backend, Type>::from_memory(mem, std::forward<Params>(p)...);
+        }
+
         /// \brief serialize the object
         /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
         /// \param[out] size the size of the memory area
@@ -90,7 +108,7 @@ namespace neam
         template<typename... Params>
         static inline bool to_memory(memory_allocator &mem, size_t &size, const volatile Type *ptr, Params &&... p)
         {
-          return serializable<Backend, Type>::to_memory(mem, size, (ptr), std::forward<Params>(p)...);
+          return serializable<Backend, Type>::to_memory(mem, size, (const Type *)(ptr), std::forward<Params>(p)...);
         }
     };
 
@@ -120,6 +138,15 @@ namespace neam
           return serializable<Backend, Type>::from_memory(memory, size, tptr, std::forward<Params>(p)...);
         }
 
+        /// \brief deserialize the object and return it
+        /// \param[in,out] mem the allocator used to allocate the object
+        /// \return *ptr. always.
+        template<typename... Params>
+        static inline Type *&from_memory(memory_allocator &mem, Params &&... p)
+        {
+          return serializable<Backend, Type>::from_memory(mem, std::forward<Params>(p)...);
+        }
+
         /// \brief serialize the object
         /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
         /// \param[out] size the size of the memory area
@@ -134,6 +161,46 @@ namespace neam
             size = 0;
             return true;
           }
+          return serializable<Backend, Type>::to_memory(mem, size, *ptr, std::forward<Params>(p)...);
+        }
+    };
+
+    template<typename Backend, typename Type>
+    class persistence::serializable<Backend, Type &>
+    {
+      public:
+        /// \brief deserialize the object
+        /// \param[in] memory the serialized object
+        /// \param[in] size the size of the memory area
+        /// \param[out] ptr a pointer to the object (the one that the function will fill)
+        /// \return true if successful
+        template<typename... Params>
+        static inline bool from_memory(const char *memory, size_t size, Type *&ptr, Params &&... p)
+        {
+          Type *tptr = reinterpret_cast<Type *>(operator new(sizeof(Type), std::nothrow));
+          if (!tptr)
+            return false;
+          *ptr = tptr;
+          return serializable<Backend, Type>::from_memory(memory, size, tptr, std::forward<Params>(p)...);
+        }
+
+        /// \brief deserialize the object and return it
+        /// \param[in,out] mem the allocator used to allocate the object
+        /// \return *ptr. always.
+        template<typename... Params>
+        static inline Type &from_memory(memory_allocator &mem, Params &&... p)
+        {
+          return serializable<Backend, Type>::from_memory(mem, std::forward<Params>(p)...);
+        }
+
+        /// \brief serialize the object
+        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] size the size of the memory area
+        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
+        /// \return true if successful
+        template<typename... Params>
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const Type* const& ptr, Params &&... p)
+        {
           return serializable<Backend, Type>::to_memory(mem, size, *ptr, std::forward<Params>(p)...);
         }
     };
@@ -221,7 +288,7 @@ namespace neam
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, std::string *ptr, Params &&... p)
+        static inline bool from_memory(const char *memory, size_t size, std::basic_string<CharT, Traits, Alloc> *ptr, Params &&... p)
         {
           char *str = nullptr;
           if (serializable<Backend, char *>::from_memory(memory, size, &str, std::forward<Params>(p)...))
@@ -239,7 +306,7 @@ namespace neam
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
         template<typename... Params>
-        static inline bool to_memory(memory_allocator &mem, size_t &size, const std::string *ptr, Params &&... p)
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const std::basic_string<CharT, Traits, Alloc> *ptr, Params &&... p)
         {
           const char *str = const_cast<const char *>(ptr->data());
           return serializable<Backend, char *>::to_memory(mem, size, &str, std::forward<Params>(p)...);

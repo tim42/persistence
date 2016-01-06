@@ -76,6 +76,26 @@ namespace neam
       } // namespace verbose
     } // namespace internal
 
+    /// \brief Pointer serializer
+    template<typename Type>
+    class persistence::serializable<persistence_backend::verbose, Type *>
+    {
+      public:
+        /// \brief serialize the object
+        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] size the size of the memory area
+        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
+        /// \return true if successful
+        template<typename... Params>
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const Type* const* ptr, size_t indent = 0, const char *name = nullptr)
+        {
+          // handle the null pointer case
+          if (!*ptr)
+            return internal::verbose::_allocate_format_string<Type *>(mem, size, indent, name, "nullptr");
+          return serializable<persistence_backend::verbose, Type>::to_memory(mem, size, *ptr, indent, name);
+        }
+    };
+
     /// \brief boolean serializer
     template<>
     class persistence::serializable<persistence_backend::verbose, bool>

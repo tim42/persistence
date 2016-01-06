@@ -35,9 +35,14 @@ namespace neam
 {
   namespace cr
   {
+    namespace internal
+    {
+      struct raw {};
+    } // namespace internal
+
     /// \brief the default serializer for the \e neam backend
     template<typename Type>
-    class persistence::serializable<persistence_backend::neam, Type, raw>
+    class persistence::serializable<persistence_backend::neam, Type, internal::raw>
     {
       static_assert(std::is_arithmetic<Type>::value, "only arithmetic types here !!!");
       public:
@@ -71,21 +76,21 @@ namespace neam
     };
 
     // for arithmetic types
-    template<> class persistence::serializable<persistence_backend::neam, char> : public persistence::serializable<persistence_backend::neam, char, raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, unsigned char> : public persistence::serializable<persistence_backend::neam, unsigned char, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, char> : public persistence::serializable<persistence_backend::neam, char, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, unsigned char> : public persistence::serializable<persistence_backend::neam, unsigned char, internal::raw> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, short> : public persistence::serializable<persistence_backend::neam, short, raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, unsigned short> : public persistence::serializable<persistence_backend::neam, unsigned short, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, short> : public persistence::serializable<persistence_backend::neam, short, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, unsigned short> : public persistence::serializable<persistence_backend::neam, unsigned short, internal::raw> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, int> : public persistence::serializable<persistence_backend::neam, int, raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, unsigned int> : public persistence::serializable<persistence_backend::neam, unsigned int, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, int> : public persistence::serializable<persistence_backend::neam, int, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, unsigned int> : public persistence::serializable<persistence_backend::neam, unsigned int, internal::raw> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, long> : public persistence::serializable<persistence_backend::neam, long, raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, unsigned long> : public persistence::serializable<persistence_backend::neam, unsigned long, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, long> : public persistence::serializable<persistence_backend::neam, long, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, unsigned long> : public persistence::serializable<persistence_backend::neam, unsigned long, internal::raw> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, float> : public persistence::serializable<persistence_backend::neam, float, raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, double> : public persistence::serializable<persistence_backend::neam, double, raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, long double> : public persistence::serializable<persistence_backend::neam, long double, raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, float> : public persistence::serializable<persistence_backend::neam, float, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, double> : public persistence::serializable<persistence_backend::neam, double, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, long double> : public persistence::serializable<persistence_backend::neam, long double, internal::raw> {};
 
 
     template<>
