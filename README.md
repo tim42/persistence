@@ -3,7 +3,7 @@
 
 
 **neam/persistence** is a small utility library that serialize and de-serialize C++ objects.
-The produced serialization output is mostly in the form _size-data_ and the binary data is only compatible with the same architecture (or more precisely, all architectures with the same endianness).
+It provides multiple backends like a JSON serializer, a verbose serializer or a binary serializer/deserializer.
 
 ## how to build
 
@@ -28,6 +28,7 @@ neam/persistence is a _non-intrusive_ serializer. This mean it won't need you to
 
 neam/persistence is an _external_ serializer: it works outside of the class to serialize, you just have to provide the name of the properties you want to serialize.
 
+neam/persistence provides multiple backends: with the same metadata, you can serialize and deserialize to multiple format (like JSON, binary, ...). Moreover, backends are easily extensible. You can either create your own backend or extend an existing backend.
 
 
 ## features
@@ -39,57 +40,55 @@ neam/persistence provides some "built-in" serializers for:
   - std::basic_string (so `std::string` too, but not only)
   - C arrays (`int m_int_array[500];`, including multi-dimensional arrays)
   - pointers (using dynamic allocation), and null pointers
-  - a generic object serializer
+  - a generic object serializer (can serialize objects properties by properties)
   - neam::array_wrapper
   - neam::persistence::raw_data (almost like a `cr::array_wrapper`)
-  - a default serializer that **dump** as-is the memory of the object
 
-For objects requesting it, a post-serialization function could be called after the serialization of the object has took place (and has been successful).
-(As the constructor won't be called, this is particularly useful. (the constructor won't be called because the compiler will default initialize all the fields, overwriting deserialized values))
+For objects requesting it, a post-serialization function could be called after the serialization of the object has been done (and has been successful).
+As the constructor won't be called, this is particularly useful. (the constructor won't be called because the compiler will default initialize all the fields, possibly overwriting deserialized values)
 
-There is also some _wrappers_: _(a code that wrap the generated data and perform some actions)_
-  - checksum (a custom, handcrafted, non-secure hashing function)
+neam/persistence also includes some _wrappers_: _(a code that wrap the generated data and perform some actions)_
+  - checksum (a custom, handcrafted, non-secure but quite fast hashing function)
   - magic number (simply add a magic number)
 
-neam/persistence also provides a `storage` class that provide the ability to store serialized objects in a file and retrieve them using a _name_.
+neam/persistence also provides a `storage` class that provide the ability to store and retrieve serialized objects to/from a file.
 
-It supports different "backends", meaning that if you want to use a different backend, there is only one parameter to set, the compiler select the correct backend at compile time !
+It supports different "backends", chosen at compile time
 Current backends:
-  - neam (default)
+  - neam (binary)
   - verbose _(serialization only)_ see what is serialized in an human readable format.
     This backend could be usefull to print data easily (instead of manual `std::cout << ... << std::endl;`), to debug a possible problem with a serialized object,
     and to see how neam::persistence works with some C++ types.
+  - JSON _(currently: serialization only)_ A JSON serializer for your C++ objects
 
 ## performances
 
 Tests ran on an Intel i7, with g++ 4.8.3, in release mode:
   - serialization:
-    - **780 Mb/s** (size of the serialized data: 1.15 Gb)
-    - **1.52 Gb/s** (size of the serialized data: 47.4 Ko)
+    - **1.26 Gb/s** (size of the serialized data: 1.15 Gb)
+    - **1.77 Gb/s** (size of the serialized data: 47.4 Ko)
   - deserialization:
-    - **2.25 Gb/s** (size of the serialized data: 1.15 Gb)
-    - **1.52 Gb/s** (size of the serialized data: 47.4 Ko)
+    - **2.30 Gb/s** (size of the serialized data: 1.15 Gb)
+    - **1.82 Gb/s** (size of the serialized data: 47.4 Ko)
 
-This is fast, isn't it ?
-
-Run the **benchmark** sample to get the perfs of your computer.
+Numbers taken from the **benchmark** sample.
 
 ## pitfalls
 
 Thinking that neam/persistence is magic. C++ isn't a dynamic language, but instead works quite _near the metal_
-(exemple: the size of some integers/floating point types depends of the underlying architecture).
+(exemple: the size/format of some integers/floating point types depends of the underlying architecture).
 
 neam/persistence doesn't handle loops, references (or non-dynamically allocated pointers). If you simply try to serialize this, you will either fall in one (or more) of those cases:
   - a stack overflow
   - running out of process memory
-  - serialization will produce a data that doesn't represent the original object
+  - serialization will produce a data that doesn't represent the original object (and this will possibly includes some memory leaks as it will have dynamically allocated some memory that won't be freed by the destructor)
 
-neam/persistence is the perfect solution to serialize trees (of all kind) but the worst solution (in the sense that it won't even work) to serialize graphs.
+neam/persistence is the perfect solution to serialize tree-like hierarchies (of all kind and complexity) but the worst solution (in the sense that it won't even work) to serialize graphs.
 
 
-you can serialize on a machine an deserialize on another if and only if:
+Using the default binary backend, you can serialize on a machine an deserialize on another if and only if:
 - the same endianness
-- the same size for floating point
+- the same size/format for floating point
 - you used the same serialization metadata on the two machines / programs (see the first example)
 
 -------
@@ -98,6 +97,23 @@ you can serialize on a machine an deserialize on another if and only if:
 # Examples
 
 **NOTE**: you're advised to take a look at the samples in the... `samples` folder.
+
+## serialize
+
+```c++
+neam::cr::persistence::raw_data serialized;
+serialized = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_object);
+```
+
+## deserialize
+
+```c++
+my_class *ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam, my_class>(my_serialized_raw_data);
+
+// ...
+
+delete ptr;
+```
 
 ## make a very simple class / struct compatible with neam/persistence
 
@@ -196,47 +212,6 @@ namespace neam
 
 ```
 
-## serialize
-
-```c++
-neam::cr::persistence::raw_data serialized;
-serialized = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_object);
-```
-
-## deserialize
-
-```c++
-my_class *ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam, my_class>(my_serialized_raw_data);
-
-// ...
-
-delete ptr;
-```
-
-## serialize _(the hard way)_
-
-This is simply what `neam::cr::persistence::serialize()` do:
-
-```c++
-neam::cr::memory_allocator mem;
-size_t size = 0;
-neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, my_class>::to_memory(mem, size, &my_object);
-```
-
-## deserialize _(the hard way)_
-
-This is simply what `neam::cr::persistence::deserialize()` do:
-
-```c++
-char *data = /*...*/;
-size_t data_size = /*...*/;
-
-// we make sure the compiler doesn't call the constructor
-my_class *ptr= reinterpret_cast<my_class *>(operator new(sizeof(my_class)));
-
-neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, my_class>::from_memory(data, data_size, ptr);
-```
-
 ## using _neam::cr::storage_
 
 ```c++
@@ -276,9 +251,11 @@ delete ptr;
 
 ## future / TODO
 
-remove extra-copy (create the element in-place). (will be a lot faster on the deserialization benchmark).
+- Add a SpiderMonkey backend
+- Add deserialization to the JSON backend
+- Improve the way std::map/std::unordered_map are handled in the verbose / neam backends
+- remove the extra-copy (create the element in-place). (could be a lot faster on the deserialization benchmark).
 
-A XML backend.
 
 ## author
 Timothée Feuillet (_neam_ or _tim42_).
