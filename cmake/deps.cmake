@@ -1,7 +1,8 @@
 
 
-# nsched deps libs (for exec)
-set(NSCHED_DEPS_LIBS )
 
-# nsched include dirs
-set(NSCHED_INCLUDE_DIRS )
+# deps libs (for exec)
+set(PROJ_DEPS_LIBS )
+
+# include dirs
+set(PROJ_INCLUDE_DIRS )
