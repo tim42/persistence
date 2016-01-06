@@ -40,7 +40,7 @@ if (${CMAKE_CURRENT_BINARY_DIR} STREQUAL ${PROJECT_SOURCE_DIR})
   # And this screw up users.
   # YAY :D
   message(WARNING "when checking: '${CMAKE_CURRENT_BINARY_DIR}' is the same as '${PROJECT_SOURCE_DIR}'")
-  message(WARNING "you must create a build folder in order to build ${PROJ_APP} !!!")
+  message(WARNING "you shhould create a build folder in order to build ${PROJ_APP} !!!")
 endif()
 
 # output
@@ -53,10 +53,12 @@ include(cmake/deps.cmake)
 
 # include those third party libs
 
-# create the NSCHED_FLAGS variable
+add_subdirectory("./${PROJ_NAME}/tools")
+
+# create the PROJ_FLAGS variable
 include(cmake/flags.cmake)
 
-include_directories("./${PROJ_NAME}/")
+include_directories("./${PROJ_NAME}")
 
 include_directories("./")
 
@@ -74,6 +76,8 @@ if (${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
   add_subdirectory(samples/benchmark)
   add_subdirectory(samples/storage)
   add_subdirectory(samples/verbose)
+  add_subdirectory(samples/json)
+
 endif()
 
 # copy
