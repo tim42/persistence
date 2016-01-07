@@ -39,7 +39,7 @@ namespace neam
   {
     namespace internal
     {
-      // already defined by the verbose backend
+      // already defined by the neam backend
       // struct numeric {};
 
       namespace json

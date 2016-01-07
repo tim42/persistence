@@ -39,7 +39,8 @@ namespace neam
   {
     namespace internal
     {
-      struct numeric {};
+      // already defined by the neam backend
+      // struct numeric {};
 
       namespace verbose
       {
@@ -71,7 +72,7 @@ namespace neam
         template<typename Type>
         static inline bool _allocate_format_string(memory_allocator &mem, size_t &size, size_t indent_level, const char *name, const std::string &data)
         {
-          return _allocate_format_string(mem, size, indent_level, neam::demangle<Type>(), name, data);
+          return _allocate_format_string(mem, size, indent_level, ::neam::demangle<Type>(), name, data);
         }
       } // namespace verbose
     } // namespace internal

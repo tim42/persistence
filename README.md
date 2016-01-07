@@ -65,7 +65,7 @@ Current backends:
 
 Tests ran on an Intel i7, with g++ 4.8.3, in release mode:
   - serialization:
-    - **1.26 Gb/s** (size of the serialized data: 1.15 Gb)
+    - **1.11 Gb/s** (size of the serialized data: 1.15 Gb)
     - **1.77 Gb/s** (size of the serialized data: 47.4 Ko)
   - deserialization:
     - **2.30 Gb/s** (size of the serialized data: 1.15 Gb)
@@ -86,10 +86,11 @@ neam/persistence doesn't handle loops, references (or non-dynamically allocated 
 neam/persistence is the perfect solution to serialize tree-like hierarchies (of all kind and complexity) but the worst solution (in the sense that it won't even work) to serialize graphs.
 
 
-Using the default binary backend, you can serialize on a machine an deserialize on another if and only if:
-- the same endianness
-- the same size/format for floating point
-- you used the same serialization metadata on the two machines / programs (see the first example)
+Using the neam binary backend, you can serialize on a machine an deserialize on another if and only if:
+- floating points have the same size/format (32bit for floats, 64 for doubles), and share the same endianness as integers
+- you used exactly the same serialization metadata on the two machines / programs
+
+Endianness (floating points + integers) and size differences (integers) are handled transparently.
 
 -------
 

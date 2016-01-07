@@ -28,6 +28,7 @@
 
 #include <type_traits>
 #include <tools/array_wrapper.hpp>
+#include <tools/endianness.hpp>
 #include "object.hpp" // for my IDE
 #include "raw_data.hpp"
 
@@ -37,14 +38,15 @@ namespace neam
   {
     namespace internal
     {
+      struct numeric {};
       struct raw {};
+
     } // namespace internal
 
-    /// \brief the default serializer for the \e neam backend
+    /// \brief A dump serializer for the \e neam backend
     template<typename Type>
     class persistence::serializable<persistence_backend::neam, Type, internal::raw>
     {
-      static_assert(std::is_arithmetic<Type>::value, "only arithmetic types here !!!");
       public:
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
@@ -75,22 +77,81 @@ namespace neam
         }
     };
 
+    /// \brief the default number serializer for the \e neam backend. Handle endianness.
+    template<typename Type>
+    class persistence::serializable<persistence_backend::neam, Type, internal::numeric>
+    {
+      static_assert(std::is_arithmetic<Type>::value, "only arithmetic types here !!!");
+      public:
+        /// \brief deserialize the object
+        /// \param[in] memory the serialized object
+        /// \param[in] size the size of the memory area
+        /// \param[out] ptr a pointer to the object (the one that the function will fill)
+        /// \return true if successful
+        static inline bool from_memory(const char *memory, size_t size, Type *ptr)
+        {
+          if (size > sizeof(uint64_t) || (size & 1) != 0)
+            return false;
+          if (size == sizeof(Type))
+            *ptr = ct::letoh(*reinterpret_cast<const Type *>(memory));
+          else
+          {
+            if (size == sizeof(uint8_t)) // no 1 byte FP
+              *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint8_t, int8_t>::type *>(memory));
+            else if (size == sizeof(uint16_t)) // no 2 bytes FP
+              *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint16_t, int16_t>::type *>(memory));
+            else if (size == sizeof(uint32_t))
+            {
+              if (std::is_floating_point<Type>())
+                *ptr = ct::letoh(*reinterpret_cast<const float *>(memory));
+              else
+                *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint32_t, int32_t>::type *>(memory));
+            }
+            else if (size == sizeof(uint64_t))
+            {
+              if (std::is_floating_point<Type>())
+                *ptr = ct::letoh(*reinterpret_cast<const double *>(memory));
+              else
+                *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint64_t, int64_t>::type *>(memory));
+            }
+          }
+          return true;
+        }
+
+        /// \brief serialize the object
+        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] size the size of the memory area
+        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
+        /// \return true if successful
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr)
+        {
+          size = sizeof(Type);
+          char *memory = reinterpret_cast<char *>(mem.allocate(size));
+          if (!memory)
+            return false;
+          *reinterpret_cast<Type *>(memory) = ct::htole(*ptr);
+          return true;
+        }
+    };
+
     // for arithmetic types
-    template<> class persistence::serializable<persistence_backend::neam, char> : public persistence::serializable<persistence_backend::neam, char, internal::raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, unsigned char> : public persistence::serializable<persistence_backend::neam, unsigned char, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, int8_t> : public persistence::serializable<persistence_backend::neam, int8_t, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::neam, uint8_t> : public persistence::serializable<persistence_backend::neam, uint8_t, internal::numeric> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, short> : public persistence::serializable<persistence_backend::neam, short, internal::raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, unsigned short> : public persistence::serializable<persistence_backend::neam, unsigned short, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, int16_t> : public persistence::serializable<persistence_backend::neam, int16_t, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::neam, uint16_t> : public persistence::serializable<persistence_backend::neam, uint16_t, internal::numeric> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, int> : public persistence::serializable<persistence_backend::neam, int, internal::raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, unsigned int> : public persistence::serializable<persistence_backend::neam, unsigned int, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, int32_t> : public persistence::serializable<persistence_backend::neam, int32_t, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::neam, uint32_t> : public persistence::serializable<persistence_backend::neam, uint32_t, internal::numeric> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, long> : public persistence::serializable<persistence_backend::neam, long, internal::raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, unsigned long> : public persistence::serializable<persistence_backend::neam, unsigned long, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, int64_t> : public persistence::serializable<persistence_backend::neam, int64_t, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::neam, uint64_t> : public persistence::serializable<persistence_backend::neam, uint64_t, internal::numeric> {};
 
-    template<> class persistence::serializable<persistence_backend::neam, float> : public persistence::serializable<persistence_backend::neam, float, internal::raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, double> : public persistence::serializable<persistence_backend::neam, double, internal::raw> {};
-    template<> class persistence::serializable<persistence_backend::neam, long double> : public persistence::serializable<persistence_backend::neam, long double, internal::raw> {};
+    template<> class persistence::serializable<persistence_backend::neam, float> : public persistence::serializable<persistence_backend::neam, float, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::neam, double> : public persistence::serializable<persistence_backend::neam, double, internal::numeric> {};
+    // TODO:
+    // template<> class persistence::serializable<persistence_backend::neam, long double> : public persistence::serializable<persistence_backend::neam, long double, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::neam, bool> : public persistence::serializable<persistence_backend::neam, int8_t, internal::numeric> {};
 
 
     template<>
