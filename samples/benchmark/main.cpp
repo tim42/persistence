@@ -83,6 +83,10 @@ namespace neam
 {
   namespace cr
   {
+    NCRP_DECLARE_NAME(my_class, s_int);
+    NCRP_DECLARE_NAME(my_class, s_double);
+    NCRP_DECLARE_NAME(my_class, s_float);
+    NCRP_DECLARE_NAME(my_class, s_map);
     template<typename Backend> class persistence::serializable<Backend, my_class> : public persistence::constructible_serializable_object
     <
       Backend, // < the backend (here: all backends)
@@ -92,19 +96,21 @@ namespace neam
       N_CALL_POST_FUNCTION(my_class, N_EMBED(42)),
 
       // simply list here the members you want to serialize / deserialize
-      NCRP_TYPED_OFFSET(my_class, s_int),
-      NCRP_TYPED_OFFSET(my_class, s_map),
-      NCRP_TYPED_OFFSET(my_class, s_double),
-      NCRP_TYPED_OFFSET(my_class, s_float)
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_int, names::my_class::s_int),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_double, names::my_class::s_double),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_float, names::my_class::s_float),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_map, names::my_class::s_map)
     > {};
 
+    NCRP_DECLARE_NAME(my_struct, s_int);
+    NCRP_DECLARE_NAME(my_struct, s_vector);
     template<typename Backend> class persistence::serializable<Backend, my_struct> : public persistence::serializable_object
     <
       Backend, // < the backend (here: all backends)
 
       // simply list here the members you want to serialize / deserialize
-      NCRP_TYPED_OFFSET(my_struct, s_int),
-      NCRP_TYPED_OFFSET(my_struct, s_vector)
+      NCRP_NAMED_TYPED_OFFSET(my_struct, s_int, names::my_struct::s_int),
+      NCRP_NAMED_TYPED_OFFSET(my_struct, s_vector, names::my_struct::s_vector)
     > {};
   } // namespace cr
 } // namespace neam
@@ -161,8 +167,11 @@ void run_test(size_t count, const std::string &name, PreFunction pre, Function f
   std::cout << "\n" << std::endl;
 }
 
+using backend = neam::cr::persistence_backend::neam;
+
 int main()
 {
+  std::cout << " -- benchmark for backend " << neam::demangle<backend>() << std::endl;
   std::cout << " -- initializing data..." << std::endl;
 
   my_class my_instance(75, 42.00000042, 4.2e-5, 23);
@@ -174,7 +183,7 @@ int main()
   neam::cr::raw_data rd_small;
   run_test(100000, "serialization of a small object", [&] {rd_small._clean();}, [&]() -> double
   {
-    rd_small = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_instance);
+    rd_small = neam::cr::persistence::serialize<backend>(my_instance);
     rd_small.assume_ownership();
     return rd_small.size;
   });
@@ -182,7 +191,7 @@ int main()
   neam::cr::raw_data rd_big;
   run_test(20, "serialization of a BIG object", [&] {rd_big._clean();}, [&]() -> double
   {
-    rd_big = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_big_instance);
+    rd_big = neam::cr::persistence::serialize<backend>(my_big_instance);
     rd_big.assume_ownership();
     return rd_big.size;
   });
@@ -190,17 +199,17 @@ int main()
   std::cout << " ----------------\n" << std::endl;
 
   my_class *ptr = reinterpret_cast<my_class *>(operator new(sizeof(my_class)));
-  ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam>(rd_small, ptr);
+  ptr = neam::cr::persistence::deserialize<backend>(rd_small, ptr);
 
   run_test(100000, "deserialization of a small object", [&] {ptr->~my_class();}, [&]() -> double
   {
-    ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam>(rd_small, ptr);
+    ptr = neam::cr::persistence::deserialize<backend>(rd_small, ptr);
     return rd_small.size;
   });
 
   run_test(20, "deserialization of a BIG object", [&] {ptr->~my_class();}, [&]() -> double
   {
-    ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam>(rd_big, ptr);
+    ptr = neam::cr::persistence::deserialize<backend>(rd_big, ptr);
     return rd_big.size;
   });
 
