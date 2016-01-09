@@ -40,7 +40,6 @@ namespace neam
     {
       struct numeric {};
       struct raw {};
-
     } // namespace internal
 
     /// \brief A dump serializer for the \e neam backend
@@ -53,7 +52,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static inline bool from_memory(const char *memory, size_t size, Type *ptr)
+        static inline bool from_memory(cr::allocation_transaction &, const char *memory, size_t size, Type *ptr)
         {
           if (size != sizeof(Type))
             return false;
@@ -88,7 +87,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static inline bool from_memory(const char *memory, size_t size, Type *ptr)
+        static inline bool from_memory(cr::allocation_transaction &, const char *memory, size_t size, Type *ptr)
         {
           if (size > sizeof(uint64_t) || (size & 1) != 0)
             return false;
@@ -163,7 +162,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static inline bool from_memory(const char *memory, size_t size, raw_data *ptr)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, raw_data *ptr)
         {
           if (size < sizeof(uint32_t))
             return false;
@@ -173,6 +172,7 @@ namespace neam
           if (!o.size)
             o.data = nullptr;
           new(ptr) raw_data(o, neam::force_duplicate);
+          transaction.register_destructor_call_on_failure(ptr);
           return true;
         }
 
@@ -203,9 +203,9 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static inline bool from_memory(const char *memory, size_t size, char **ptr)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, char **ptr)
         {
-          *ptr = reinterpret_cast<char *>(operator new(size + 1, std::nothrow));
+          *ptr = reinterpret_cast<char *>(transaction.allocate_raw(size + 1));
           if (*ptr)
           {
             memcpy(*ptr, memory, size);
@@ -239,7 +239,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static inline bool from_memory(const char *memory, size_t size, std::pair<First, Second> *ptr)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::pair<First, Second> *ptr)
         {
           if (size < 2 * sizeof(uint32_t))
             return false;
@@ -252,15 +252,12 @@ namespace neam
           if (size < sz[0] + 2 * sizeof(uint32_t) + sz[1])
             return false;
 
-          bool ret = serializable<persistence_backend::neam, First>::from_memory(memory + sizeof(uint32_t), sz[0], &ptr->first);
+          bool ret = serializable<persistence_backend::neam, First>::from_memory(transaction, memory + sizeof(uint32_t), sz[0], &ptr->first);
           if (!ret)
             return false;
-          ret &= serializable<persistence_backend::neam, Second>::from_memory(memory + 2 * sizeof(uint32_t) + sz[0], sz[1], &ptr->second);
+          ret = serializable<persistence_backend::neam, Second>::from_memory(transaction, memory + 2 * sizeof(uint32_t) + sz[0], sz[1], &ptr->second);
           if (!ret)
-          {
-            ptr->first.~First();
             return false;
-          }
 
           return ret;
         }
@@ -303,13 +300,13 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static inline bool from_memory(const char *memory, size_t size, neam::array_wrapper<Type> *ptr)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, neam::array_wrapper<Type> *ptr)
         {
           if (size < sizeof(uint32_t))
             return false;
 
           ptr->size = *reinterpret_cast<const uint32_t *>(memory);
-          ptr->array = reinterpret_cast<Type *>(operator new(ptr->size * sizeof(Type), std::nothrow));
+          ptr->array = reinterpret_cast<Type *>(transaction.allocate_raw(ptr->size * sizeof(Type)));
 
           if (!ptr->array)
             return false;
@@ -326,23 +323,51 @@ namespace neam
 
             if (offset + elem_size > size)
               break;
-            if (!(serializable<persistence_backend::neam, Type>::from_memory(memory + offset, elem_size, ptr->array + index)))
+            if (!(serializable<persistence_backend::neam, Type>::from_memory(transaction, memory + offset, elem_size, ptr->array + index)))
               break;
 
             offset += elem_size;
           }
 
           if (index != ptr->size)
-          {
-            // call destructors to free allocated memory...
-            for (size_t i = 0; i < index; ++i)
-            {
-              ptr->array[i].~Type();
-            }
-
-            delete reinterpret_cast<char *>(ptr->array);
             return false;
+
+          return true;
+        }
+
+        /// \brief deserialize the object
+        /// \param[in] memory the serialized object
+        /// \param[in] size the size of the memory area
+        /// \param[out] ptr a pointer to the object (the one that the function will fill)
+        /// \return true if successful
+        static inline bool from_memory_preallocated(cr::allocation_transaction &transaction, const char *memory, size_t size, neam::array_wrapper<Type> *ptr)
+        {
+          if (size < sizeof(uint32_t) || ptr->size != *reinterpret_cast<const uint32_t *>(memory))
+            return false;
+
+          if (!ptr->array)
+            return true;
+
+          size_t offset = sizeof(uint32_t);
+          size_t index = 0;
+          for (; index < ptr->size; ++index)
+          {
+            if (offset + sizeof(uint32_t) > size)
+              break;
+
+            size_t elem_size = *reinterpret_cast<const uint32_t *>(memory + offset);
+            offset += sizeof(uint32_t);
+
+            if (offset + elem_size > size)
+              break;
+            if (!(serializable<persistence_backend::neam, Type>::from_memory(transaction, memory + offset, elem_size, ptr->array + index)))
+              break;
+
+            offset += elem_size;
           }
+
+          if (index != ptr->size)
+            return false;
 
           return true;
         }

@@ -51,7 +51,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, Type *ptr)
+        static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr)
         {
           if (size < sizeof(uint32_t))
             return false;
@@ -60,7 +60,7 @@ namespace neam
           if (magic != magic_number)
             return false;
 
-          return serializable<persistence_backend::neam, Type>::from_memory(memory + sizeof(uint32_t), size - sizeof(uint32_t), const_cast<Type *>(ptr));
+          return serializable<persistence_backend::neam, Type>::from_memory(transaction, memory + sizeof(uint32_t), size - sizeof(uint32_t), const_cast<Type *>(ptr));
         }
 
         /// \brief serialize the object
@@ -127,7 +127,7 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static bool from_memory(const char *memory, size_t size, Type *ptr)
+        static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr)
         {
           if (size < sizeof(uint64_t))
             return false;
@@ -137,7 +137,7 @@ namespace neam
           if (checksum != simple_checksum(memory + sizeof(uint64_t), size - sizeof(uint64_t)))
             return false;
 
-          return serializable<persistence_backend::neam, Type>::from_memory(memory + sizeof(uint64_t), size - sizeof(uint64_t), const_cast<Type *>(ptr));
+          return serializable<persistence_backend::neam, Type>::from_memory(transaction, memory + sizeof(uint64_t), size - sizeof(uint64_t), const_cast<Type *>(ptr));
         }
 
         /// \brief serialize the object

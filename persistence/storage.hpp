@@ -83,16 +83,18 @@ namespace neam
           if (!_read_from_file(name, memory, size))
             return nullptr;
 
-          Object *ret = reinterpret_cast<Object *>(operator new(sizeof(Object), std::nothrow));
+          cr::allocation_transaction transaction;
+          Object *ret = reinterpret_cast<Object *>(transaction.allocate_raw(sizeof(Object)));
 
           if (!ret)
             return nullptr;
 
-          if (!neam::cr::persistence::serializable<persistence_backend::neam, checksum<Object>>::from_memory(memory, size, ret))
+          if (!neam::cr::persistence::serializable<persistence_backend::neam, checksum<Object>>::from_memory(transaction, memory, size, ret))
           {
-            delete reinterpret_cast<char *>(ret);
+            transaction.rollback();
             return nullptr;
           }
+          transaction.complete();
           return ret;
         }
 

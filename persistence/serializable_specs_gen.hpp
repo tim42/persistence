@@ -44,24 +44,21 @@ namespace neam
     class persistence::serializable<Backend, const Type>
     {
       public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &transaction, const Type *ptr)
+        {
+          return serializable<Backend, Type>::default_initializer(transaction, const_cast<Type *>(ptr));
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, const Type *ptr, Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, const Type *ptr, Params &&... p)
         {
-          return serializable<Backend, Type>::from_memory(memory, size, const_cast<Type *>(ptr), std::forward<Params>(p)...);
-        }
-
-        /// \brief deserialize the object and return it
-        /// \param[in,out] mem the allocator used to allocate the object
-        /// \return *ptr. always.
-        template<typename... Params>
-        static inline const Type &from_memory(memory_allocator &mem, Params &&... p)
-        {
-          return serializable<Backend, Type>::from_memory(mem, std::forward<Params>(p)...);
+          return serializable<Backend, Type>::from_memory(transaction, memory, size, const_cast<Type *>(ptr), std::forward<Params>(p)...);
         }
 
         /// \brief serialize the object
@@ -80,24 +77,21 @@ namespace neam
     class persistence::serializable<Backend, volatile Type>
     {
       public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &transaction, volatile Type *ptr)
+        {
+          return serializable<Backend, Type>::default_initializer(transaction, reinterpret_cast<Type *>(ptr));
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, volatile Type *ptr, Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, volatile Type *ptr, Params &&... p)
         {
-          return serializable<Backend, Type>::from_memory(memory, size, reinterpret_cast<Type *>(ptr), std::forward<Params>(p)...);
-        }
-
-        /// \brief deserialize the object and return it
-        /// \param[in,out] mem the allocator used to allocate the object
-        /// \return *ptr. always.
-        template<typename... Params>
-        static inline volatile Type &from_memory(memory_allocator &mem, Params &&... p)
-        {
-          return serializable<Backend, Type>::from_memory(mem, std::forward<Params>(p)...);
+          return serializable<Backend, Type>::from_memory(transaction, memory, size, reinterpret_cast<Type *>(ptr), std::forward<Params>(p)...);
         }
 
         /// \brief serialize the object
@@ -116,13 +110,20 @@ namespace neam
     class persistence::serializable<Backend, Type *>
     {
       public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &, Type **ptr)
+        {
+          *ptr = nullptr;
+          return true;
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, Type **ptr, Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type **ptr, Params &&... p)
         {
           // handle the null pointer case
           if (!size)
@@ -131,20 +132,11 @@ namespace neam
             return true;
           }
 
-          Type *tptr = reinterpret_cast<Type *>(operator new(sizeof(Type), std::nothrow));
+          Type *tptr = reinterpret_cast<Type *>(transaction.allocate_raw(sizeof(Type)));
           if (!tptr)
             return false;
           *ptr = tptr;
-          return serializable<Backend, Type>::from_memory(memory, size, tptr, std::forward<Params>(p)...);
-        }
-
-        /// \brief deserialize the object and return it
-        /// \param[in,out] mem the allocator used to allocate the object
-        /// \return *ptr. always.
-        template<typename... Params>
-        static inline Type *&from_memory(memory_allocator &mem, Params &&... p)
-        {
-          return serializable<Backend, Type>::from_memory(mem, std::forward<Params>(p)...);
+          return serializable<Backend, Type>::from_memory(transaction, memory, size, tptr, std::forward<Params>(p)...);
         }
 
         /// \brief serialize the object
@@ -169,28 +161,34 @@ namespace neam
     class persistence::serializable<Backend, Type &>
     {
       public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &, Type *&ptr)
+        {
+          return false;
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, Type *&ptr, Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *&ptr, Params &&... p)
         {
-          Type *tptr = reinterpret_cast<Type *>(operator new(sizeof(Type), std::nothrow));
+          Type *tptr = reinterpret_cast<Type *>(transaction.allocate_raw(sizeof(Type)));
           if (!tptr)
             return false;
           *ptr = tptr;
-          return serializable<Backend, Type>::from_memory(memory, size, tptr, std::forward<Params>(p)...);
+          return serializable<Backend, Type>::from_memory(transaction, memory, size, tptr, std::forward<Params>(p)...);
         }
 
         /// \brief deserialize the object and return it
         /// \param[in,out] mem the allocator used to allocate the object
         /// \return *ptr. always.
         template<typename... Params>
-        static inline Type &from_memory(memory_allocator &mem, Params &&... p)
+        static inline Type &from_memory(cr::allocation_transaction &transaction, memory_allocator &mem, Params &&... p)
         {
-          return serializable<Backend, Type>::from_memory(mem, std::forward<Params>(p)...);
+          return serializable<Backend, Type>::from_memory(transaction, mem, std::forward<Params>(p)...);
         }
 
         /// \brief serialize the object
@@ -209,23 +207,35 @@ namespace neam
     class persistence::serializable<Backend, std::vector<Type, Alloc>>
     {
       public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &transaction, std::vector<Type> *ptr)
+        {
+          new(ptr)  std::vector<Type>();
+          transaction.register_destructor_call_on_failure(ptr);
+          return true;
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, std::vector<Type> *ptr, Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::vector<Type> *ptr, Params &&... p)
         {
           array_wrapper<Type> o(nullptr, 0);
-          if (serializable<Backend, neam::array_wrapper<Type>>::from_memory(memory, size, &o, std::forward<Params>(p)...))
+          cr::allocation_transaction temp_transaction;
+          if (serializable<Backend, neam::array_wrapper<Type>>::from_memory(temp_transaction, memory, size, &o, std::forward<Params>(p)...))
           {
             new(ptr) std::vector<Type, Alloc>();
-            ptr->reserve(o.size + 1);
-            ptr->insert(ptr->begin(), o.array, o.array + o.size);
-            delete o.array;
+            transaction.register_destructor_call_on_failure(ptr);
+            ptr->reserve(o.size);
+            for (size_t i = 0; i < o.size; ++i)
+              ptr->emplace_back(std::move(o.array[i]));
+            temp_transaction.rollback();
             return true;
           }
+          temp_transaction.rollback();
           return false;
         }
 
@@ -246,23 +256,27 @@ namespace neam
     class persistence::serializable<Backend, Type[Size]>
     {
       public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &, Type (*array)[Size])
+        {
+          // TODO
+          return false;
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, Type (*array)[Size], Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type (*array)[Size], Params &&... p)
         {
           array_wrapper<Type> o(nullptr, 0);
-          if (serializable<Backend, neam::array_wrapper<Type>>::from_memory(memory, size, &o, std::forward<Params>(p)...))
-          {
-            if (o.size == sizeof(Type) * Size)
-              memcpy(array, o.array, o.size);
-            delete o.array;
-            return o.size == sizeof(Type) * Size;
-          }
-          return false;
+          o.size = Size;
+          o.array = reinterpret_cast<Type *>(array);
+          if (!serializable<Backend, neam::array_wrapper<Type>>::from_memory_preallocated(transaction, memory, size, &o, std::forward<Params>(p)...))
+            return false;
+          return true;
         }
 
         /// \brief serialize the object
@@ -282,21 +296,32 @@ namespace neam
     class persistence::serializable<Backend, std::basic_string<CharT, Traits, Alloc>>
     {
       public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &transaction, std::basic_string<CharT, Traits, Alloc> *ptr)
+        {
+          new(ptr) std::basic_string<CharT, Traits, Alloc>();
+          transaction.register_destructor_call_on_failure(ptr);
+          return true;
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, std::basic_string<CharT, Traits, Alloc> *ptr, Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::basic_string<CharT, Traits, Alloc> *ptr, Params &&... p)
         {
           char *str = nullptr;
-          if (serializable<Backend, char *>::from_memory(memory, size, &str, std::forward<Params>(p)...))
+          cr::allocation_transaction temp_transaction;
+          if (serializable<Backend, char *>::from_memory(temp_transaction, memory, size, &str, std::forward<Params>(p)...))
           {
             new(ptr) std::basic_string<CharT, Traits, Alloc>(str);
-            delete str;
+            temp_transaction.rollback();
+            transaction.register_destructor_call_on_failure(ptr);
             return true;
           }
+          temp_transaction.rollback();
           return false;
         }
 
@@ -317,29 +342,37 @@ namespace neam
     class persistence::serializable<Backend, std::map<Key, Value, Compare, Alloc>>
     {
       public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &transaction, std::map<Key, Value> *ptr)
+        {
+          new(ptr) std::map<Key, Value>();
+          transaction.register_destructor_call_on_failure(ptr);
+          return true;
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, std::map<Key, Value> *ptr, Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::map<Key, Value> *ptr, Params &&... p)
         {
           neam::array_wrapper<std::pair<Key, Value>> tmp(nullptr, 0);
-          if (!serializable<Backend, neam::array_wrapper<std::pair<Key, Value>>>::from_memory(memory, size, &tmp, std::forward<Params>(p)...))
+          cr::allocation_transaction temp_transaction;
+          if (!serializable<Backend, neam::array_wrapper<std::pair<Key, Value>>>::from_memory(temp_transaction, memory, size, &tmp, std::forward<Params>(p)...))
           {
+            temp_transaction.rollback();
             return false;
           }
 
           new(ptr) std::map<Key, Value, Compare, Alloc>();
+          transaction.register_destructor_call_on_failure(ptr);
 
           for (size_t i = 0; i < tmp.size; ++i)
-          {
             ptr->emplace_hint(ptr->end(), std::move(tmp.array[i].first), std::move(tmp.array[i].second));
-            tmp.array[i].~pair();
-           }
 
-          delete reinterpret_cast<char *>(tmp.array);
+          temp_transaction.rollback(); // free the memory allocated by the from_memory call
 
           return true;
         }
@@ -366,26 +399,37 @@ namespace neam
     class persistence::serializable<Backend, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc>>
     {
       public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &transaction, std::unordered_map<Key, Value> *ptr)
+        {
+          new(ptr) std::unordered_map<Key, Value>();
+          transaction.register_destructor_call_on_failure(ptr);
+          return true;
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(const char *memory, size_t size, std::unordered_map<Key, Value> *ptr, Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::unordered_map<Key, Value> *ptr, Params &&... p)
         {
           neam::array_wrapper<std::pair<Key, Value>> tmp(nullptr, 0);
-          if (!serializable<Backend, neam::array_wrapper<std::pair<Key, Value>>>::from_memory(memory, size, &tmp, std::forward<Params>(p)...))
+          cr::allocation_transaction temp_transaction;
+          if (!serializable<Backend, neam::array_wrapper<std::pair<Key, Value>>>::from_memory(temp_transaction, memory, size, &tmp, std::forward<Params>(p)...))
           {
+            temp_transaction.rollback();
             return false;
           }
 
           new(ptr) std::unordered_map<Key, Value, Hash, KeyEqual, Alloc>();
+          transaction.register_destructor_call_on_failure(ptr);
 
           for (size_t i = 0; i < tmp.size; ++i)
             ptr->emplace(std::move(tmp.array[i].first), std::move(tmp.array[i].second));
 
-          delete tmp.array;
+          temp_transaction.rollback(); // free the memory allocated by the from_memory call
 
           return true;
         }

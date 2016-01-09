@@ -123,13 +123,16 @@ bool neam::cr::storage::_load()
   char *memory = new char[size];
 
   file.read(memory, size);
-
-  if (!neam::cr::persistence::serializable<persistence_backend::neam, checksum<std::map<std::string, raw_data> *>>::from_memory(memory, size, &mapped_file))
+  cr::allocation_transaction transaction;
+  if (!neam::cr::persistence::serializable<persistence_backend::neam, checksum<std::map<std::string, raw_data> *>>::from_memory(transaction, memory, size, &mapped_file))
   {
     delete [] memory;
+    transaction.rollback();
     mapped_file = nullptr;
     return false;
   }
+
+  transaction.complete();
 
   delete [] memory;
 
