@@ -168,6 +168,8 @@ void run_test(size_t count, const std::string &name, PreFunction pre, Function f
 }
 
 using backend = neam::cr::persistence_backend::neam;
+constexpr float multiplier = 1;
+// #define skip_big
 
 int main()
 {
@@ -175,47 +177,57 @@ int main()
   std::cout << " -- initializing data..." << std::endl;
 
   my_class my_instance(75, 42.00000042, 4.2e-5, 23);
+#ifndef skip_big
   my_class my_big_instance(12000, 42.00000042, 4.2e-5, 23);
-
+#endif
   std::cout << " ----------------\n" << std::endl;
 
 
   neam::cr::raw_data rd_small;
-  run_test(100000, "serialization of a small object", [&] {rd_small._clean();}, [&]() -> double
+  run_test(100000 * multiplier, "serialization of a small object", [&] {rd_small._clean();}, [&]() -> double
   {
     rd_small = neam::cr::persistence::serialize<backend>(my_instance);
     rd_small.assume_ownership();
     return rd_small.size;
   });
 
+#ifndef skip_big
   neam::cr::raw_data rd_big;
-  run_test(20, "serialization of a BIG object", [&] {rd_big._clean();}, [&]() -> double
+  run_test(20 * multiplier, "serialization of a BIG object", [&] {rd_big._clean();}, [&]() -> double
   {
     rd_big = neam::cr::persistence::serialize<backend>(my_big_instance);
     rd_big.assume_ownership();
     return rd_big.size;
   });
+#endif
 
   std::cout << " ----------------\n" << std::endl;
 
   my_class *ptr = reinterpret_cast<my_class *>(operator new(sizeof(my_class)));
   ptr = neam::cr::persistence::deserialize<backend>(rd_small, ptr);
+  if (!ptr)
+  {
+    std::cerr << "Well, neam::persistence is broken :(" << std::endl;
+    return 1;
+  }
 
-  run_test(100000, "deserialization of a small object", [&] {ptr->~my_class();}, [&]() -> double
+  run_test(100000 * multiplier, "deserialization of a small object", [&] {ptr->~my_class();}, [&]() -> double
   {
     ptr = neam::cr::persistence::deserialize<backend>(rd_small, ptr);
     return rd_small.size;
   });
+  rd_small._clean();
 
-  run_test(20, "deserialization of a BIG object", [&] {ptr->~my_class();}, [&]() -> double
+#ifndef skip_big
+  run_test(20 * multiplier, "deserialization of a BIG object", [&] {ptr->~my_class();}, [&]() -> double
   {
     ptr = neam::cr::persistence::deserialize<backend>(rd_big, ptr);
     return rd_big.size;
   });
+  rd_big._clean();
+#endif
 
   delete ptr;
-  rd_big._clean();
-  rd_small._clean();
 
   return 0;
 }
