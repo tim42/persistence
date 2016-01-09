@@ -290,125 +290,78 @@ namespace neam
         }
     };
 
-    /// \brief serialize an array and all its elements
-    template<typename Type>
-    class persistence::serializable<persistence_backend::neam, neam::array_wrapper<Type>>
+    /// \brief Helper to [de]serialize list-like objects
+    namespace persistence_helper
     {
-      public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, neam::array_wrapper<Type> *ptr)
-        {
-          if (size < sizeof(uint32_t))
-            return false;
-
-          ptr->size = *reinterpret_cast<const uint32_t *>(memory);
-          ptr->array = reinterpret_cast<Type *>(transaction.allocate_raw(ptr->size * sizeof(Type)));
-
-          if (!ptr->array)
-            return false;
-
-          size_t offset = sizeof(uint32_t);
-          size_t index = 0;
-          for (; index < ptr->size; ++index)
+      template<typename Type, typename Caller>
+      class list_serializable<persistence_backend::neam, Type, Caller>
+      {
+        public:
+          /// \brief Called to deserialize the list-object
+          static inline bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, Type *ptr)
           {
-            if (offset + sizeof(uint32_t) > size)
-              break;
-
-            size_t elem_size = *reinterpret_cast<const uint32_t *>(memory + offset);
-            offset += sizeof(uint32_t);
-
-            if (offset + elem_size > size)
-              break;
-            if (!(serializable<persistence_backend::neam, Type>::from_memory(transaction, memory + offset, elem_size, ptr->array + index)))
-              break;
-
-            offset += elem_size;
-          }
-
-          if (index != ptr->size)
-            return false;
-
-          return true;
-        }
-
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static inline bool from_memory_preallocated(cr::allocation_transaction &transaction, const char *memory, size_t size, neam::array_wrapper<Type> *ptr)
-        {
-          if (size < sizeof(uint32_t) || ptr->size != *reinterpret_cast<const uint32_t *>(memory))
-            return false;
-
-          if (!ptr->array)
-            return true;
-
-          size_t offset = sizeof(uint32_t);
-          size_t index = 0;
-          for (; index < ptr->size; ++index)
-          {
-            if (offset + sizeof(uint32_t) > size)
-              break;
-
-            size_t elem_size = *reinterpret_cast<const uint32_t *>(memory + offset);
-            offset += sizeof(uint32_t);
-
-            if (offset + elem_size > size)
-              break;
-            if (!(serializable<persistence_backend::neam, Type>::from_memory(transaction, memory + offset, elem_size, ptr->array + index)))
-              break;
-
-            offset += elem_size;
-          }
-
-          if (index != ptr->size)
-            return false;
-
-          return true;
-        }
-
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static inline bool to_memory(memory_allocator &mem, size_t &size, const neam::array_wrapper<Type> *ptr)
-        {
-          uint32_t whole_object_size = sizeof(uint32_t);
-
-          *reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t))) = ptr->size;
-
-          for (size_t index = 0; index < ptr->size; ++index)
-          {
-            if (!to_memory_single(ptr->array + index, whole_object_size, mem))
+            if (size < sizeof(uint32_t))
               return false;
+
+            const size_t element_count = *reinterpret_cast<const uint32_t *>(memory);
+            if (!element_count)
+              return Caller::from_memory_null(transaction, ptr);
+
+            if (!Caller::from_memory_allocate(transaction, element_count, ptr))
+              return false;
+
+            size_t offset = sizeof(uint32_t);
+
+            for (size_t index = 0; index < element_count; ++index)
+            {
+              if (offset + sizeof(uint32_t) > size)
+                return false;
+
+              const size_t elem_size = *reinterpret_cast<const uint32_t *>(memory + offset);
+              offset += sizeof(uint32_t);
+
+              if (offset + elem_size > size)
+                return false;
+              if (!Caller::from_memory_single(transaction, ptr, memory + offset, elem_size, index))
+                return false;
+
+              offset += elem_size;
+            }
+
+            return true;
           }
 
-          size = whole_object_size;
+          /// \brief Called to serialize the list-object
+          static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr)
+          {
+            uint32_t whole_object_size = sizeof(uint32_t);
 
-          return true;
-        }
+            const size_t element_count = Caller::to_memory_get_element_count(ptr);
+            *reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t))) = element_count;
 
+            auto iterator = Caller::to_memory_get_iterator(ptr);
 
-      private:
-        static inline bool to_memory_single(const Type *ptr, uint32_t &global_size, memory_allocator &mem)
-        {
-          size_t element_size = 0;
+            for (size_t index = 0; index < element_count; ++index)
+            {
+              size_t tmp_size = 0;
+              uint32_t *size_memory = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
+              if (!Caller::to_memory_single(mem, tmp_size, iterator, ptr))
+                return false;
+              *size_memory = tmp_size;
+              whole_object_size += tmp_size + sizeof(uint32_t);
+              if (!Caller::to_memory_increment_iterator(iterator))
+                return false;
+            }
 
-          uint32_t *size_memory = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          if (!serializable<persistence_backend::neam, Type>::to_memory(mem, element_size, ptr))
-            return false;
+            size = whole_object_size;
+            if (!Caller::to_memory_end_iterator(iterator))
+              return false;
+            return true;
+          }
 
-          *size_memory = element_size;
-          global_size += element_size + sizeof(uint32_t);
-          return true;
-        }
-    };
+        private:
+      };
+    } // namespace persistence_helper
   } // namespace r
 } // namespace neam
 

@@ -204,91 +204,202 @@ namespace neam
     };
 
     template<typename Backend, typename Type, typename Alloc>
-    class persistence::serializable<Backend, std::vector<Type, Alloc>>
+    class persistence::serializable<Backend, std::vector<Type, Alloc>> : public persistence_helper::list_serializable<Backend, std::vector<Type, Alloc>, persistence::serializable<Backend, std::vector<Type, Alloc>>>
     {
       public:
         /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
-        static inline bool default_initializer(cr::allocation_transaction &transaction, std::vector<Type> *ptr)
+        static inline bool default_initializer(cr::allocation_transaction &transaction, std::vector<Type, Alloc> *ptr)
         {
-          new(ptr)  std::vector<Type>();
+          new(ptr) std::vector<Type, Alloc>();
           transaction.register_destructor_call_on_failure(ptr);
           return true;
         }
 
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        template<typename... Params>
-        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::vector<Type> *ptr, Params &&... p)
+        static inline bool from_memory_null(cr::allocation_transaction &transaction, std::vector<Type, Alloc> *ptr) // When the size is 0 or no data is given
         {
-          array_wrapper<Type> o(nullptr, 0);
-          cr::allocation_transaction temp_transaction;
-          if (serializable<Backend, neam::array_wrapper<Type>>::from_memory(temp_transaction, memory, size, &o, std::forward<Params>(p)...))
+          return default_initializer(transaction, ptr);
+        }
+
+        static inline bool from_memory_allocate(cr::allocation_transaction &transaction, size_t size, std::vector<Type, Alloc> *ptr)
+        {
+          if (default_initializer(transaction, ptr))
           {
-            new(ptr) std::vector<Type, Alloc>();
-            transaction.register_destructor_call_on_failure(ptr);
-            ptr->reserve(o.size);
-            for (size_t i = 0; i < o.size; ++i)
-              ptr->emplace_back(std::move(o.array[i]));
-            temp_transaction.rollback();
+            ptr->reserve(size);
             return true;
           }
-          temp_transaction.rollback();
           return false;
         }
 
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
         template<typename... Params>
-        static inline bool to_memory(memory_allocator &mem, size_t &size, const std::vector<Type> *ptr, Params &&... p)
+        static inline bool from_memory_single(cr::allocation_transaction &transaction, std::vector<Type, Alloc> *ptr, const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
         {
-          array_wrapper<Type> o(const_cast<Type *>(ptr->data()), ptr->size());
-          return serializable<Backend, neam::array_wrapper<Type>>::to_memory(mem, size, &o, std::forward<Params>(p)...);
+          int8_t data[sizeof(Type)] = {0};
+          Type *dptr = reinterpret_cast<Type *>(data);
+
+          if (index != ptr->size())
+            return false;
+
+          if (persistence::serializable<Backend, Type>::from_memory(transaction, sub_memory, sub_size, dptr, std::forward<Params>(p)...))
+          {
+            ptr->emplace_back(std::move(*dptr));
+            return true;
+          }
+          return false;
+        }
+
+        static inline size_t to_memory_get_iterator(const std::vector<Type, Alloc> *)
+        {
+          return 0;
+        }
+
+        static inline size_t to_memory_get_element_count(const std::vector<Type, Alloc> *ptr)
+        {
+          return ptr->size();
+        }
+
+        static inline bool to_memory_increment_iterator(size_t &it)
+        {
+          ++it;
+          return true;
+        }
+
+        template<typename... Params>
+        static inline bool to_memory_single(memory_allocator &mem, size_t &size, size_t &it, const std::vector<Type, Alloc> *ptr, Params && ... p)
+        {
+          if (it >= ptr->size())
+            return false;
+          return persistence::serializable<Backend, Type>::to_memory(mem, size, &((*ptr)[it]), std::forward<Params>(p)...);
+        }
+
+        static inline bool to_memory_end_iterator(size_t &)
+        {
+          return true;
         }
     };
 
     template<typename Backend, typename Type, size_t Size>
-    class persistence::serializable<Backend, Type[Size]>
+    class persistence::serializable<Backend, Type[Size]> : public persistence_helper::list_serializable<Backend, Type[Size], persistence::serializable<Backend, Type[Size]>>
     {
       public:
         /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
         static inline bool default_initializer(cr::allocation_transaction &, Type (*array)[Size])
         {
           // TODO
+          (void)array;
           return false;
         }
 
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        template<typename... Params>
-        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type (*array)[Size], Params &&... p)
+        static inline bool from_memory_null(cr::allocation_transaction &transaction, Type (*array)[Size]) // When the size is 0 or no data is given
         {
-          array_wrapper<Type> o(nullptr, 0);
-          o.size = Size;
-          o.array = reinterpret_cast<Type *>(array);
-          if (!serializable<Backend, neam::array_wrapper<Type>>::from_memory_preallocated(transaction, memory, size, &o, std::forward<Params>(p)...))
+          return default_initializer(transaction, array);
+        }
+
+        static inline bool from_memory_allocate(cr::allocation_transaction &, size_t size, Type (*)[Size])
+        {
+          return size == Size;
+        }
+
+        template<typename... Params>
+        static inline bool from_memory_single(cr::allocation_transaction &transaction, Type (*array)[Size], const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
+        {
+          if (index >= Size)
             return false;
+
+          return persistence::serializable<Backend, Type>::from_memory(transaction, sub_memory, sub_size, &((*array)[index]), std::forward<Params>(p)...);
+        }
+
+        static inline size_t to_memory_get_iterator(const Type (*)[Size])
+        {
+          return 0;
+        }
+
+        static inline size_t to_memory_get_element_count(const Type (*)[Size])
+        {
+          return Size;
+        }
+
+        static inline bool to_memory_increment_iterator(size_t &it)
+        {
+          ++it;
           return true;
         }
 
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
         template<typename... Params>
-        static inline bool to_memory(memory_allocator &mem, size_t &size, const Type (*array)[Size], Params &&... p)
+        static inline bool to_memory_single(memory_allocator &mem, size_t &size, size_t &it, const Type (*array)[Size], Params && ... p)
         {
-          array_wrapper<Type> o(const_cast<Type *>(reinterpret_cast<const Type *>(array)), Size);
-          return serializable<Backend, neam::array_wrapper<Type>>::to_memory(mem, size, &o, std::forward<Params>(p)...);
+          if (it >= Size)
+            return false;
+          return persistence::serializable<Backend, Type>::to_memory(mem, size, &((*array)[it]), std::forward<Params>(p)...);
+        }
+
+        static inline bool to_memory_end_iterator(size_t &)
+        {
+          return true;
+        }
+    };
+
+    template<typename Backend, typename Type>
+    class persistence::serializable<Backend, neam::array_wrapper<Type>> : public persistence_helper::list_serializable<Backend, neam::array_wrapper<Type>, persistence::serializable<Backend,neam::array_wrapper<Type>>>
+    {
+      public:
+        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+        static inline bool default_initializer(cr::allocation_transaction &transaction, neam::array_wrapper<Type> *ptr)
+        {
+          new(ptr) neam::array_wrapper<Type>(nullptr, 0);
+          transaction.register_destructor_call_on_failure(ptr);
+          return true;
+        }
+
+        static inline bool from_memory_null(cr::allocation_transaction &transaction, neam::array_wrapper<Type> *ptr) // When the size is 0 or no data is given
+        {
+          return default_initializer(transaction, ptr);
+        }
+
+        static inline bool from_memory_allocate(cr::allocation_transaction &transaction, size_t size, neam::array_wrapper<Type> *ptr)
+        {
+          Type *array = reinterpret_cast<Type *>(transaction.allocate_raw(sizeof(Type) * size));
+          if (!array)
+            return false;
+          new(ptr) neam::array_wrapper<Type>(array, size);
+          transaction.register_destructor_call_on_failure(ptr);
+          return true;
+        }
+
+        template<typename... Params>
+        static inline bool from_memory_single(cr::allocation_transaction &transaction, neam::array_wrapper<Type> *ptr, const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
+        {
+          if (index >= ptr->size)
+            return false;
+          return persistence::serializable<Backend, Type>::from_memory(transaction, sub_memory, sub_size, &(ptr->array[index]), std::forward<Params>(p)...);
+        }
+
+        static inline size_t to_memory_get_iterator(const neam::array_wrapper<Type> *)
+        {
+          return 0;
+        }
+
+        static inline size_t to_memory_get_element_count(const neam::array_wrapper<Type> *ptr)
+        {
+          return ptr->size;
+        }
+
+        static inline bool to_memory_increment_iterator(size_t &it)
+        {
+          ++it;
+          return true;
+        }
+
+        template<typename... Params>
+        static inline bool to_memory_single(memory_allocator &mem, size_t &size, size_t &it, const neam::array_wrapper<Type> *ptr, Params && ... p)
+        {
+          if (it >= ptr->size)
+            return false;
+          return persistence::serializable<Backend, Type>::to_memory(mem, size, &(ptr->array[it]), std::forward<Params>(p)...);
+        }
+
+        static inline bool to_memory_end_iterator(size_t &)
+        {
+          return true;
         }
     };
 

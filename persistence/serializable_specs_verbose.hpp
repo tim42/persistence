@@ -220,55 +220,49 @@ namespace neam
         }
     };
 
-    /// \brief serialize an array and all its elements
-    template<typename Type>
-    class persistence::serializable<persistence_backend::verbose, neam::array_wrapper<Type>>
+    namespace persistence_helper
     {
-      public:
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const neam::array_wrapper<Type> *ptr, size_t indent_level = 0, const char *name = nullptr)
-        {
-          size_t whole_object_size = 0;
-          bool res = true;
-
-          if (!internal::verbose::_allocate_format_string<Type[]>(mem, whole_object_size, indent_level, name, "// [" + std::to_string(ptr->size) + "]"))
-            return false;
-
-          if (!internal::verbose::_allocate_string(mem, size, indent_level, "{\n"))
-            return false;
-
-          for (size_t index = 0; index < ptr->size; ++index)
+      /// \brief Helper to [de]serialize list-like objects
+      template<typename Type, typename Caller>
+      class list_serializable<persistence_backend::verbose, Type, Caller>
+      {
+        public:
+          /// \brief Called to serialize the list-object
+          static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, size_t indent_level = 0, const char *name = nullptr)
           {
-            res &= to_memory_single(ptr->array + index, whole_object_size, mem, indent_level, nullptr);
-            if (!res)
+            size_t whole_object_size = 0;
+
+            const size_t element_count = Caller::to_memory_get_element_count(ptr);
+            auto iterator = Caller::to_memory_get_iterator(ptr);
+
+            if (!internal::verbose::_allocate_format_string<Type>(mem, whole_object_size, indent_level, name, "// [" + std::to_string(element_count) + "]"))
               return false;
+
+            if (!internal::verbose::_allocate_string(mem, size, indent_level, "{\n"))
+              return false;
+
+            for (size_t index = 0; index < element_count; ++index)
+            {
+              size_t element_size = 0;
+              if (!Caller::to_memory_single(mem, element_size, iterator, ptr, indent_level + 1))
+                return false;
+              whole_object_size += element_size;
+              if (!Caller::to_memory_increment_iterator(iterator))
+                return false;
+            }
+
+            if (!Caller::to_memory_end_iterator(iterator))
+              return false;
+
+            if (!internal::verbose::_allocate_string(mem, size, indent_level, "}\n"))
+              return false;
+
+            size = whole_object_size;
+
+            return true;
           }
-
-          if (!internal::verbose::_allocate_string(mem, size, indent_level, "}\n"))
-            return false;
-
-          size = whole_object_size;
-
-          return res;
-        }
-
-
-      private:
-        static inline bool to_memory_single(const Type *ptr, size_t &global_size, memory_allocator &mem, size_t indent_level, const char *name)
-        {
-          size_t element_size = 0;
-
-          if (!serializable<persistence_backend::verbose, Type>::to_memory(mem, element_size, ptr, indent_level + 1, name))
-            return false;
-
-          global_size += element_size;
-          return true;
-        }
-    };
+      };
+    } // namespace persistence_helper
 
     /// \brief this serialize complex objects (like classes)
     /// this generate meta-data used to generate code that will fill the object.
