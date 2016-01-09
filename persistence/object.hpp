@@ -369,11 +369,12 @@ namespace neam
   } // namespace cr
 } // namespace neam
 
+#include "list_serializable.hpp"
 #include "serializable_specs_gen.hpp"
 #include "serializable_specs_neam.hpp"
 #include "serializable_specs_verbose.hpp"
-#include "serializable_specs_json.hpp"
 #include "serializable_wrappers.hpp"
+#include "json_backend/serializable_specs_json.hpp"
 
 #endif /*__N_2006814652382068822_103083989__OBJECT_HPP__*/
 
