@@ -48,10 +48,6 @@ namespace neam
     {
       namespace json
       {
-        // // serialization things
-
-        
-
         // // deserialization stuff
 
         // I have to convert things[8-16-32-64-bit integers/double/float] from string
@@ -288,113 +284,6 @@ namespace neam
           }
           return false;
         }
-
-
-        /// \brief A simple unserializer for key/value elements.
-        /// The Child class have to provide the following methods (as static)
-        ///   bool initialize_object(cr::allocation_transaction &transaction, Type *ptr) // --> called at the very beginning of the operation
-        ///   bool push_entry(cr::allocation_transaction &transaction, Type *ptr, std::pair< Key, Value >* entry) // --> called for each element to push
-        template<typename Child, typename Key, typename Value>
-        class collection_list_unserializer
-        {
-          public:
-            /// \brief deserialize the object
-            /// \param[in] memory the serialized object
-            /// \param[in] size the size of the memory area
-            /// \param[out] ptr a pointer to the object (the one that the function will fill)
-            /// \return true if successful
-            template<typename Type>
-            static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr)
-            {
-              internal::json::types type = internal::json::get_type(memory[0]);
-              if (type == internal::json::types::collection)
-                return from_memory_collection(transaction, memory, size, ptr);
-              else if (type == internal::json::types::list)
-                return from_memory_list(transaction, memory, size, ptr);
-              return false;
-            }
-
-
-          private:
-            /// \brief Handle the collection mode of the std::map
-            template<typename Type>
-            static inline bool from_memory_collection(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr)
-            {
-              --size;   // skip the closing brace
-              ++memory; // skip the opening brace
-
-              new(ptr) std::map<Key, Value>();
-              transaction.register_destructor_call_on_failure(ptr);
-
-              // temporary transaction
-              cr::allocation_transaction temp_transaction;
-
-              // I know that this is unforgivable, but I want to have an object without dynamic allocation and without calling its constructor
-              int8_t temp_memory[sizeof(std::pair<Key, Value>)];
-              std::pair<Key, Value> *pair = reinterpret_cast<std::pair<Key, Value>*>(temp_memory);
-
-              size_t index = 0;
-              if (memory[0] == '"' || internal::json::advance_next(memory, size, index))
-              {
-                while (true)
-                {
-                  // retrieve the string index
-                  if (internal::json::get_type(memory[index]) != internal::json::types::string)
-                    return false;
-                  size_t end_index = index;
-                  if (!internal::json::get_element_end_index(memory, size, end_index, internal::json::types::string)) // the JSON is not well formatted
-                    return false;
-
-                  // get the key (must be a string)
-                  if (!::neam::cr::persistence::serializable<persistence_backend::json, Key>::from_memory(temp_transaction, memory + index, end_index + 1 - index, &pair->first))
-                    return false;
-
-                  // skip the : token
-                  index = end_index;
-                  if (!internal::json::advance_next(memory, size, index, ':'))
-                    break;
-
-                  // chain unserialize
-                  internal::json::types elem_type = internal::json::get_type(memory[index]);
-                  end_index = index;
-                  if (!internal::json::get_element_end_index(memory, size, end_index, elem_type))
-                    return false;
-                  if (!::neam::cr::persistence::serializable<persistence_backend::json, Value>::from_memory(temp_transaction, memory + index, end_index + 1 - index, &pair->second))
-                    return false;
-                  index = end_index;
-
-                  ptr->emplace_hint(ptr->end(), std::move(pair->first), std::move(pair->second));
-
-                  if (!internal::json::advance_next(memory, size, index, ','))
-                    break; // can't do much more
-                }
-              }
-              return true;
-            }
-
-            /// \brief Handle the list mode (this is just a copy/pasting of the default from_memory).
-            template<typename Type>
-            static inline bool from_memory_list(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr)
-            {
-              neam::array_wrapper<std::pair<Key, Value>> tmp(nullptr, 0);
-              cr::allocation_transaction temp_transaction;
-              if (!::neam::cr::persistence::serializable<persistence_backend::json, neam::array_wrapper<std::pair<Key, Value>>>::from_memory(temp_transaction, memory, size, &tmp))
-              {
-                temp_transaction.rollback();
-                return false;
-              }
-
-//               new(ptr) std::map<Key, Value, Compare, Alloc>();
-              transaction.register_destructor_call_on_failure(ptr);
-
-              for (size_t i = 0; i < tmp.size; ++i)
-                ptr->emplace_hint(ptr->end(), std::move(tmp.array[i].first), std::move(tmp.array[i].second));
-
-              temp_transaction.rollback(); // free the memory allocated by the from_memory call
-
-              return true;
-            }
-        };
       } // namespace json
     } // namespace internal
   } // namespace cr

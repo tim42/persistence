@@ -249,132 +249,6 @@ namespace neam
         }
     };
 
-    template<typename First, typename Second>
-    class persistence::serializable<persistence_backend::json, std::pair<First, Second>>
-    {
-      public:
-        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
-        static inline bool default_initializer(cr::allocation_transaction &transaction, std::pair<First, Second> *ptr)
-        {
-          if (!serializable<persistence_backend::json, First>::default_initializer(transaction, &ptr->first))
-            return false;
-          if (!serializable<persistence_backend::json, Second>::default_initializer(transaction, &ptr->second))
-            return false;
-          return true;
-        }
-
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::pair<First, Second> *ptr)
-        {
-          internal::json::types type = internal::json::get_type(memory[0]);
-          if (type != internal::json::types::collection)
-            return false;
-          --size;   // skip the closing brace
-          ++memory; // skip the opening brace
-
-          int status[2] = {0, 0}; // -1: failed, 0: not done, 1: done with success
-
-          size_t index = 0;
-          if (memory[0] == '"' || internal::json::advance_next(memory, size, index))
-          {
-            while (status[0] != 1 || status[1] != 1)
-            {
-              // retrieve the string index
-              if (internal::json::get_type(memory[index]) != internal::json::types::string)
-                return false;
-              size_t end_index = index;
-              if (!internal::json::get_element_end_index(memory, size, end_index, internal::json::types::string)) // the JSON is not well formatted
-                return false;
-
-              // test the string
-              int element = -1; // BAD
-              if (end_index - (index + 1) == 5 && !memcmp(memory + index + 1, "first", 5))
-                element = 0; // first
-              else if (end_index - (index + 1) == 6 && !memcmp(memory + index + 1, "second", 6))
-                element = 1; // second
-
-              // skip the : token
-              index = end_index;
-              if (!internal::json::advance_next(memory, size, index, ':'))
-                break;
-
-              // chain unserialize
-              internal::json::types elem_type = internal::json::get_type(memory[index]);
-              end_index = index;
-              if (!internal::json::get_element_end_index(memory, size, end_index, elem_type))
-                return false;
-              if (element == 0 && status[0] != 1) // Not done or failed: do it this turn !
-              {
-                if (!serializable<persistence_backend::json, First>::from_memory(transaction, memory + index, end_index + 1 - index, &ptr->first))
-                  status[0] = -1;
-                else
-                  status[0] = 1;
-              }
-              else if (element == 1 && status[1] != 1) // Not done or failed: do it this turn !
-              {
-                if (!serializable<persistence_backend::json, Second>::from_memory(transaction, memory + index, end_index + 1 - index, &ptr->second))
-                  status[1] = -1;
-                else
-                  status[1] = 1;
-              }
-              index = end_index;
-              if (!internal::json::advance_next(memory, size, index, ','))
-                break; // can't do much more
-            }
-          }
-
-          if (!status[0]) // not present in the JSON: default initialize it
-          {
-            if (!serializable<persistence_backend::json, First>::default_initializer(transaction, &ptr->first))
-              return false;
-          }
-          if (!status[1]) // not present in the JSON: default initialize it
-          {
-            if (!serializable<persistence_backend::json, Second>::default_initializer(transaction, &ptr->second))
-              return false;
-          }
-          return true;
-        }
-
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const std::pair<First, Second> *ptr, size_t indent_level = 0, const char *name = nullptr)
-        {
-          size_t global_size = 0;
-          if (!internal::json::_allocate_format_string(mem, global_size, indent_level, name, ""))
-            return false;
-          if (!internal::json::_allocate_string(mem, global_size, 0, "{\n"))
-            return false;
-
-          size_t s1 = 0;
-          bool ret = serializable<persistence_backend::json, First>::to_memory(mem, s1, &ptr->first, indent_level + 1, "first");
-          if (!ret)
-            return false;
-          if (!internal::json::_allocate_string(mem, global_size, 0, ",\n"))
-            return false;
-
-          size_t s2 = 0;
-          ret = serializable<persistence_backend::json, Second>::to_memory(mem, s2, &ptr->second, indent_level + 1, "second");
-          if (!ret)
-            return false;
-
-          if (!internal::json::_allocate_string(mem, global_size, 0, "\n"))
-            return false;
-          if (!internal::json::_allocate_string(mem, global_size, indent_level, "}"))
-            return false;
-
-          size = global_size + s1 + s2;
-          return true;
-        }
-    };
-
     template<>
     class persistence::serializable<persistence_backend::json, raw_data>
     {
@@ -623,180 +497,128 @@ namespace neam
             return count;
           }
       };
+
+      /// \brief Helper to [de]serialize collection-like objects
+      /// In this backend, this is exactly as the list serializer. (code re-use ftw).
+      template<typename Type, typename Caller>
+      class collection_serializable<persistence_backend::json, Type, Caller>
+      {
+        public:
+          static inline bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, Type *ptr)
+          {
+            internal::json::types type = internal::json::get_type(memory[0]);
+            if (type == internal::json::types::list)
+              return list_serializable<persistence_backend::json, Type, Caller>::from_memory(transaction, memory, size, ptr);
+            if (type != internal::json::types::collection)
+              return false;
+
+            --size;   // skip the closing brace
+            ++memory; // skip the opening brace
+
+            if (!Caller::from_memory_allocate(transaction, 0, ptr))
+              return false;
+
+            // I know that this is unforgivable, but I want to have an object without dynamic allocation and without calling its constructor
+            int8_t temp_memory[Caller::from_memory_get_kv_pair_size(ptr)];
+            void *temp_memory_ptr = temp_memory;
+
+            size_t index = 0;
+            if (memory[0] == '"' || internal::json::advance_next(memory, size, index))
+            {
+              while (true)
+              {
+                // retrieve the string index
+                if (internal::json::get_type(memory[index]) != internal::json::types::string)
+                  return false;
+                size_t end_index = index;
+                if (!internal::json::get_element_end_index(memory, size, end_index, internal::json::types::string)) // the JSON is not well formatted
+                  return false;
+
+                // get the key (must be a string)
+                if (!Caller::from_memory_single_key(transaction, ptr, temp_memory_ptr, memory + index, end_index - index))
+                  return false;
+
+                // skip the : token
+                index = end_index;
+                if (!internal::json::advance_next(memory, size, index, ':'))
+                  break;
+
+                // chain unserialize
+                internal::json::types elem_type = internal::json::get_type(memory[index]);
+                end_index = index;
+                if (!internal::json::get_element_end_index(memory, size, end_index, elem_type))
+                  return false;
+
+                // get the value
+                if (!Caller::from_memory_single_value(transaction, ptr, temp_memory_ptr, memory + index, end_index - index))
+                  return false;
+                index = end_index;
+
+                if (!Caller::from_memory_single_push_kv(transaction, ptr, temp_memory_ptr))
+                  return false;
+
+                if (!internal::json::advance_next(memory, size, index, ','))
+                  break; // can't do much more
+              }
+            }
+            return true;
+          }
+
+          static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, size_t indent_level = 0, const char *name = nullptr)
+          {
+            if (/*!internal::json::is_string_key<Key>::value*/ false /*TODO*/)
+              return list_serializable<persistence_backend::json, Type, Caller>::to_memory(mem, size, ptr, indent_level, name);
+
+            size_t whole_object_size = 0;
+
+            if (!internal::json::_allocate_format_string(mem, whole_object_size, indent_level, name, ""))
+              return false;
+
+            if (!internal::json::_allocate_string(mem, whole_object_size, 0, "{\n"))
+              return false;
+
+            const size_t element_count = Caller::to_memory_get_element_count(ptr);
+            auto it = Caller::to_memory_get_iterator(ptr);
+
+            bool first = true;
+            for (size_t i = 0; i < element_count; ++i)
+            {
+              if (!first)
+              {
+                if (!internal::json::_allocate_string(mem, whole_object_size, 0, ",\n"))
+                  return false;
+              }
+              size_t sz = 0;
+              if (!Caller::to_memory_single_key(mem, sz, it, ptr, indent_level + 1))
+                return false;
+
+              whole_object_size += sz;
+
+              if (!internal::json::_allocate_string(mem, whole_object_size, indent_level, ":"))
+                return false;
+
+              sz = 0;
+
+              if (!Caller::to_memory_single_value(mem, sz, it, ptr, indent_level + 1))
+                return false;
+
+              whole_object_size += sz;
+              first = false;
+
+              if (!Caller::to_memory_increment_iterator(it))
+                return false;
+            }
+            if (!Caller::to_memory_end_iterator(it))
+              return false;
+            if (!internal::json::_allocate_string(mem, whole_object_size, 0, "\n"))
+              return false;
+            if (!internal::json::_allocate_string(mem, whole_object_size, indent_level, "}"))
+              return false;
+            size = whole_object_size;
+            return true;
+          }
+      };
     } // namespace persistence_helper
-
-    template<typename Key, typename Value, typename Compare, typename Alloc>
-    class persistence::serializable<persistence_backend::json, std::map<Key, Value, Compare, Alloc>>
-    {
-      public:
-        /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
-        static inline bool default_initializer(cr::allocation_transaction &transaction, std::map<Key, Value> *ptr)
-        {
-          new(ptr) std::map<Key, Value>();
-          transaction.register_destructor_call_on_failure(ptr);
-          return true;
-        }
-
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::map<Key, Value> *ptr)
-        {
-          internal::json::types type = internal::json::get_type(memory[0]);
-          if (type == internal::json::types::collection)
-            return from_memory_collection(transaction, memory, size, ptr);
-          else if (type == internal::json::types::list)
-            return from_memory_list(transaction, memory, size, ptr);
-          return false;
-        }
-
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static inline bool to_memory(memory_allocator &mem, size_t &size, const std::map<Key, Value> *ptr, size_t indent_level = 0, const char *name = nullptr)
-        {
-          if (internal::json::is_string_key<Key>::value)
-            return to_memory_collection(mem, size, ptr, indent_level, name);
-          else
-            return to_memory_list(mem, size, ptr, indent_level, name);
-        }
-
-      private:
-        /// \brief Handle the collection mode of the std::map
-        static inline bool from_memory_collection(cr::allocation_transaction &transaction, const char *memory, size_t size, std::map<Key, Value> *ptr)
-        {
-          --size;   // skip the closing brace
-          ++memory; // skip the opening brace
-
-          new(ptr) std::map<Key, Value>();
-          transaction.register_destructor_call_on_failure(ptr);
-
-          // temporary transaction
-          cr::allocation_transaction temp_transaction;
-
-          // I know that this is unforgivable, but I want to have an object without dynamic allocation and without calling its constructor
-          int8_t temp_memory[sizeof(std::pair<Key, Value>)];
-          std::pair<Key, Value> *pair = reinterpret_cast<std::pair<Key, Value>*>(temp_memory);
-
-          size_t index = 0;
-          if (memory[0] == '"' || internal::json::advance_next(memory, size, index))
-          {
-            while (true)
-            {
-              // retrieve the string index
-              if (internal::json::get_type(memory[index]) != internal::json::types::string)
-                return false;
-              size_t end_index = index;
-              if (!internal::json::get_element_end_index(memory, size, end_index, internal::json::types::string)) // the JSON is not well formatted
-                return false;
-
-              // get the key (must be a string)
-              if (!serializable<persistence_backend::json, Key>::from_memory(temp_transaction, memory + index, end_index - index, &pair->first))
-                return false;
-
-              // skip the : token
-              index = end_index;
-              if (!internal::json::advance_next(memory, size, index, ':'))
-                break;
-
-              // chain unserialize
-              internal::json::types elem_type = internal::json::get_type(memory[index]);
-              end_index = index;
-              if (!internal::json::get_element_end_index(memory, size, end_index, elem_type))
-                return false;
-              if (!serializable<persistence_backend::json, Value>::from_memory(temp_transaction, memory + index, end_index - index, &pair->second))
-                return false;
-              index = end_index;
-
-              ptr->emplace_hint(ptr->end(), std::move(pair->first), std::move(pair->second));
-
-              if (!internal::json::advance_next(memory, size, index, ','))
-                break; // can't do much more
-            }
-          }
-          return true;
-        }
-
-        /// \brief Handle the list mode (this is just a copy/pasting of the default from_memory).
-        static inline bool from_memory_list(cr::allocation_transaction &transaction, const char *memory, size_t size, std::map<Key, Value> *ptr)
-        {
-          neam::array_wrapper<std::pair<Key, Value>> tmp(nullptr, 0);
-          cr::allocation_transaction temp_transaction;
-          if (!serializable<persistence_backend::json, neam::array_wrapper<std::pair<Key, Value>>>::from_memory(temp_transaction, memory, size, &tmp))
-          {
-            temp_transaction.rollback();
-            return false;
-          }
-
-          new(ptr) std::map<Key, Value, Compare, Alloc>();
-          transaction.register_destructor_call_on_failure(ptr);
-
-          for (size_t i = 0; i < tmp.size; ++i)
-            ptr->emplace_hint(ptr->end(), std::move(tmp.array[i].first), std::move(tmp.array[i].second));
-
-          temp_transaction.rollback(); // free the memory allocated by the from_memory call
-
-          return true;
-        }
-
-
-        /// \brief collection serializer (when key is a string)
-        static inline bool to_memory_collection(memory_allocator &mem, size_t &size, const std::map<Key, Value> *ptr, size_t indent_level = 0, const char *name = nullptr)
-        {
-          size_t whole_object_size = 0;
-          bool res = true;
-
-          if (!internal::json::_allocate_format_string(mem, whole_object_size, indent_level, name, ""))
-            return false;
-
-          if (!internal::json::_allocate_string(mem, whole_object_size, 0, "{\n"))
-            return false;
-
-          bool first = true;
-          for (auto &it : *ptr)
-          {
-            if (!first)
-            {
-              if (!internal::json::_allocate_string(mem, whole_object_size, 0, ",\n"))
-                return false;
-            }
-            size_t sz = 0;
-            if (!serializable<persistence_backend::json, Key>::to_memory(mem, sz, &it.first, indent_level + 1))
-              return false;
-            whole_object_size += sz;
-            if (!internal::json::_allocate_string(mem, whole_object_size, indent_level, ":"))
-              return false;
-            sz = 0;
-            if (!serializable<persistence_backend::json, Value>::to_memory(mem, sz, &it.second, indent_level + 1))
-              return false;
-            whole_object_size += sz;
-            first = false;
-          }
-          if (!internal::json::_allocate_string(mem, whole_object_size, 0, "\n"))
-            return false;
-          if (!internal::json::_allocate_string(mem, whole_object_size, indent_level, "}"))
-            return false;
-          size = whole_object_size;
-          return res;
-        }
-
-        /// \brief Handle the list mode (this is just a copy/pasting of the default from_memory).
-        template<typename... Params>
-        static inline bool to_memory_list(memory_allocator &mem, size_t &size, const std::map<Key, Value> *ptr, Params &&... p)
-        {
-          std::vector<std::pair<const Key, Value> *> tmp;
-          tmp.reserve(ptr->size());
-
-          for (auto & it : *ptr)
-            tmp.emplace_back(const_cast<std::pair<const Key, Value> *>(&it));
-
-          return serializable<persistence_backend::json, std::vector<std::pair<const Key, Value> *>>::to_memory(mem, size, &tmp, std::forward<Params>(p)...);
-        }
-    };
 
     /// \brief this serialize complex objects (like classes)
     /// this generate meta-data used to generate code that will fill the object.
@@ -900,10 +722,10 @@ namespace neam
           //  if compare the key to each of the possible values that are in the OffsetTypeList
           //  if it match, it then unserialize the element by calling from_memory(...)
           NEAM_EXECUTE_PACK((
-            res &= (++index && strlen(OffsetTypeList::name) == key_size && !memcmp(key, OffsetTypeList::name, key_size) && !ar[index - 1] && (ar[index - 1] = true)
+            res &= ++index && strlen(OffsetTypeList::name) == key_size && !memcmp(key, OffsetTypeList::name, key_size) && !ar[index - 1] && (ar[index - 1] = true)
             ? serializable<persistence_backend::json, typename OffsetTypeList::type>::from_memory(transaction, memory, size, reinterpret_cast<typename OffsetTypeList::type *>(reinterpret_cast<uint8_t *>(ptr) + OffsetTypeList::offset))
             : true
-          )));
+          ));
           return res;
         }
 

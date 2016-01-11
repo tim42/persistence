@@ -172,37 +172,6 @@ namespace neam
         }
     };
 
-    template<typename First, typename Second>
-    class persistence::serializable<persistence_backend::verbose, std::pair<First, Second>>
-    {
-      public:
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, const std::pair<First, Second> *ptr, size_t indent_level = 0, const char *name = nullptr)
-        {
-          if (!internal::verbose::_allocate_format_string<std::pair<First, Second>>(mem, size, indent_level, name, ""))
-            return false;
-          if (!internal::verbose::_allocate_string(mem, size, indent_level, "{\n"))
-            return false;
-
-          bool ret = serializable<persistence_backend::verbose, First>::to_memory(mem, size, &ptr->first, indent_level + 1, "first");
-          if (!ret)
-            return false;
-
-          ret = serializable<persistence_backend::verbose, Second>::to_memory(mem, size, &ptr->second, indent_level + 1, "second");
-          if (!ret)
-            return false;
-
-          if (!internal::verbose::_allocate_string(mem, size, indent_level, "}\n"))
-            return false;
-
-          return true;
-        }
-    };
-
     template<>
     class persistence::serializable<persistence_backend::verbose, raw_data>
     {
@@ -262,6 +231,11 @@ namespace neam
             return true;
           }
       };
+
+      /// \brief Helper to [de]serialize collection-like objects
+      /// In this backend, this is exactly as the list serializer. (code re-use ftw).
+      template<typename Type, typename Caller>
+      class collection_serializable<persistence_backend::verbose, Type, Caller> : public list_serializable<persistence_backend::verbose, Type, Caller> {};
     } // namespace persistence_helper
 
     /// \brief this serialize complex objects (like classes)

@@ -230,67 +230,7 @@ namespace neam
         }
     };
 
-    template<typename First, typename Second>
-    class persistence::serializable<persistence_backend::neam, std::pair<First, Second>>
-    {
-      public:
-        /// \brief deserialize the object
-        /// \param[in] memory the serialized object
-        /// \param[in] size the size of the memory area
-        /// \param[out] ptr a pointer to the object (the one that the function will fill)
-        /// \return true if successful
-        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::pair<First, Second> *ptr)
-        {
-          if (size < 2 * sizeof(uint32_t))
-            return false;
-
-          uint32_t sz[2];
-          sz[0] = *reinterpret_cast<const uint32_t *>(memory);
-          if (size < sz[0] + 2 * sizeof(uint32_t))
-            return false;
-          sz[1] = *reinterpret_cast<const uint32_t *>(memory + sz[0] + sizeof(uint32_t));
-          if (size < sz[0] + 2 * sizeof(uint32_t) + sz[1])
-            return false;
-
-          bool ret = serializable<persistence_backend::neam, First>::from_memory(transaction, memory + sizeof(uint32_t), sz[0], &ptr->first);
-          if (!ret)
-            return false;
-          ret = serializable<persistence_backend::neam, Second>::from_memory(transaction, memory + 2 * sizeof(uint32_t) + sz[0], sz[1], &ptr->second);
-          if (!ret)
-            return false;
-
-          return ret;
-        }
-
-        /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-        /// \param[out] size the size of the memory area
-        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-        /// \return true if successful
-        static inline bool to_memory(memory_allocator &mem, size_t &size, const std::pair<First, Second> *ptr)
-        {
-          size_t sz[2] = {0, 0};
-
-
-          uint32_t *sz_mem = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          bool ret = serializable<persistence_backend::neam, First>::to_memory(mem, sz[0], &ptr->first);
-          if (!ret)
-            return false;
-          *sz_mem = sz[0];
-
-          sz_mem = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-          ret = serializable<persistence_backend::neam, Second>::to_memory(mem, sz[1], &ptr->second);
-          if (!ret)
-            return false;
-          *sz_mem = sz[1];
-
-          size = sz[0] + sz[1] + 2 * sizeof(uint32_t);
-
-          return true;
-        }
-    };
-
-    /// \brief Helper to [de]serialize list-like objects
+    /// \brief Helper to [de]serialize list-like & collection-like objects
     namespace persistence_helper
     {
       template<typename Type, typename Caller>
@@ -361,6 +301,11 @@ namespace neam
 
         private:
       };
+
+      /// \brief Helper to [de]serialize collection-like objects
+      /// In this backend, this is exactly as the list serializer. (code re-use ftw).
+      template<typename Type, typename Caller>
+      class collection_serializable<persistence_backend::neam, Type, Caller> : public list_serializable<persistence_backend::neam, Type, Caller> {};
     } // namespace persistence_helper
   } // namespace r
 } // namespace neam
