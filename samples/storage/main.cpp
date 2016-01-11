@@ -18,8 +18,9 @@ class my_class
 
     void print(const std::string &str) const
     {
-      neam::cr::out.log() << LOGGER_INFO << str << neam::cr::newline
-                          << "   my_class: [s_int: " << s_int << ", s_double: " << s_double << ", s_float: " << s_float << ", i: " << i << "]" << std::endl;
+      neam::cr::raw_data verbose = neam::cr::persistence::serialize<neam::cr::persistence_backend::verbose>(this);
+
+      neam::cr::out.log() << LOGGER_INFO << str << '\n' << verbose.data << std::endl;
     }
 
     void increment()
@@ -50,6 +51,9 @@ namespace neam
 {
   namespace cr
   {
+    NCRP_DECLARE_NAME(my_class, s_int);
+    NCRP_DECLARE_NAME(my_class, s_double);
+    NCRP_DECLARE_NAME(my_class, s_float);
     template<typename Backend> class persistence::serializable<Backend, my_class> : public persistence::constructible_serializable_object
     <
       Backend,
@@ -59,9 +63,9 @@ namespace neam
       N_CALL_POST_FUNCTION(my_class, N_EMBED(42)),
 
       // simply list here the members you want to serialize / deserialize
-      NCRP_TYPED_OFFSET(my_class, s_int),
-      NCRP_TYPED_OFFSET(my_class, s_double),
-      NCRP_TYPED_OFFSET(my_class, s_float)
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_int, names::my_class::s_int),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_double, names::my_class::s_double),
+      NCRP_NAMED_TYPED_OFFSET(my_class, s_float, names::my_class::s_float)
     > {};
   } // namespace cr
 } // namespace neam
