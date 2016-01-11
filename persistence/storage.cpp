@@ -88,7 +88,7 @@ void neam::cr::storage::_sync()
   size_t size = 0;
 
   memory_allocator mem;
-  if (!neam::cr::persistence::serializable<persistence_backend::neam, checksum<std::map<std::string, raw_data>>>::to_memory(mem, size, mapped_file))
+  if (!neam::cr::persistence::serializable<persistence_backend::neam, xor_data<std::map<std::string, raw_data>>>::to_memory(mem, size, mapped_file))
     return;
 
   file.close();
@@ -124,11 +124,11 @@ bool neam::cr::storage::_load()
 
   file.read(memory, size);
   cr::allocation_transaction transaction;
-  if (!neam::cr::persistence::serializable<persistence_backend::neam, checksum<std::map<std::string, raw_data> *>>::from_memory(transaction, memory, size, &mapped_file))
+  if (!neam::cr::persistence::serializable<persistence_backend::neam, xor_data<std::map<std::string, raw_data> *>>::from_memory(transaction, memory, size, &mapped_file))
   {
-    delete [] memory;
-    transaction.rollback();
     mapped_file = nullptr;
+    transaction.rollback();
+    delete [] memory;
     return false;
   }
 
