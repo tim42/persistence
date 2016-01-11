@@ -3,7 +3,7 @@
 
 
 **neam/persistence** is a small utility library that serialize and de-serialize C++ objects.
-It provides multiple backends like a JSON serializer, a verbose serializer or a binary serializer/deserializer.
+It provides multiple backends like a JSON serializer/deserializer, a verbose serializer or a binary serializer/deserializer.
 
 ## how to build
 
@@ -50,26 +50,31 @@ As the constructor won't be called, this is particularly useful. (the constructo
 neam/persistence also includes some _wrappers_: _(a code that wrap the generated data and perform some actions)_
   - checksum (a custom, handcrafted, non-secure but quite fast hashing function)
   - magic number (simply add a magic number)
+  - a xor wrapper that xor the data to possibly obfuscate it a little bit (it uses a seedable PRNG to generate the sequence to xor the data with)
 
 neam/persistence also provides a `storage` class that provide the ability to store and retrieve serialized objects to/from a file.
 
 It supports different "backends", chosen at compile time
 Current backends:
   - neam (binary)
+  - JSON: A JSON serializer and deserializer for your C++ objects
   - verbose _(serialization only)_ see what is serialized in an human readable format.
     This backend could be usefull to print data easily (instead of manual `std::cout << ... << std::endl;`), to debug a possible problem with a serialized object,
     and to see how neam::persistence works with some C++ types.
-  - JSON _(currently: serialization only)_ A JSON serializer for your C++ objects
 
 ## performances
 
-Tests ran on an Intel i7, with g++ 4.8.3, in release mode:
+Tests ran on an Intel i7, with g++ 4.8.3, in release mode with the binary backend
   - serialization:
-    - **1.11 Gb/s** (size of the serialized data: 1.15 Gb)
-    - **1.77 Gb/s** (size of the serialized data: 47.4 Ko)
+    - **1.16 Gb/s** (size of the serialized data: 1.15 Gb)
+    - **1.34 Gb/s** (size of the serialized data: 47.4 Ko)
   - deserialization:
-    - **2.30 Gb/s** (size of the serialized data: 1.15 Gb)
-    - **1.82 Gb/s** (size of the serialized data: 47.4 Ko)
+    - **1.62 Gb/s** (size of the serialized data: 1.15 Gb)
+    - **1.37 Gb/s** (size of the serialized data: 47.4 Ko)
+
+**NOTE**: due to some recent changes in the architecture, neam::persistence has lost some speed (at most 1Gb/s on the deserialization), but it should be easily improved in the future.
+Also, the JSON backend is not finished yet and is really **dumb** (it processes multiple time the same data, perform a lot of small operation instead of a big, faster one) 
+so there's a LOT of room for improvement here.
 
 Numbers taken from the **benchmark** sample.
 
@@ -97,19 +102,19 @@ Endianness (floating points + integers) and size differences (integers) are hand
 
 # Examples
 
-**NOTE**: you're advised to take a look at the samples in the... `samples` folder.
+**NOTE**: you're advised to take a look at the samples in the `samples` folder.
 
 ## serialize
 
 ```c++
 neam::cr::persistence::raw_data serialized;
-serialized = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_object);
+serialized = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam /*JSON, verbose */>(&my_object);
 ```
 
 ## deserialize
 
 ```c++
-my_class *ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam, my_class>(my_serialized_raw_data);
+my_class *ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam /*JSON, verbose */, my_class>(my_serialized_raw_data);
 
 // ...
 
@@ -120,7 +125,7 @@ delete ptr;
 
 **NOTE:** If you want to serialize private members of a class, you have to add this statement `friend neam::cr::persistence;` in the class to serialize
 
-_you should take a look at the `simple` sample ;)_
+_you should take a look at the `simple` or the `storage` samples ;)_
 
 
 ```C++
@@ -149,7 +154,7 @@ namespace neam
         NCRP_TYPED_OFFSET(my_struct, my_float),
         NCRP_TYPED_OFFSET(my_struct, my_map_of_vector)
       > {};
-  } // namespace r
+  } // namespace cr
 } // namespace neam
 
 
@@ -163,7 +168,7 @@ this would result in a massive memory leak and revert the object in a default st
 
 **NOTE:** _[important note]_ : This function is mandatory if you have _complex_ (like `std::vector` or any other classes)
 types in your class and those members aren't part of the serialization process. You have to class the placement new operator on those members
-(example for a std::vector: `operator new(&m_int_vector) std::vector();`. This won't allocate memory, simply call the constructor of the object).
+(example for a std::vector: `new(&m_int_vector) std::vector<int>();`. This won't allocate memory, simply call the constructor of the object).
 
 ```C++
 // this is the struct your want to make serializable:
@@ -213,50 +218,11 @@ namespace neam
 
 ```
 
-## using _neam::cr::storage_
-
-```c++
-neam::cr::storage storage("path/to/my-storage-file.ndb");
-
-// check if the file contains valid data or if it contains a specific object
-if (!storage.is_valid() || !storage.contains("exemple/object"))
-{
-	// no: initialize the file with a default object:
-	storage.write_to_file("exemple/object", my_class());
-}
-
-// the file here is initialized and contains an object named "exemple/object".
-// retrieve it:
-my_class *ptr = storage.load_from_file<my_class>("exemple/object");
-
-// test if the pointer is valid:
-if (!ptr)
-{
-	// re-initialize the object (overwrite its previous invalid content)
-	storage.write_to_file("exemple/object", my_class());
-	// reload it:
-	ptr = storage.load_from_file<my_class>("exemple/object");
-	if (!ptr)
-		abort(); // do whatever you want: the problem here shouldn't happen
-}
-
-// update things in the object
-ptr->update_object();
-
-// update the content of the file
-storage.write_to_file("exemple/object", *ptr);
-
-// free the memory
-delete ptr;
-```
-
 ## future / TODO
 
+- Improve the JSON backend to avoid that dumb way of processing the size (pass a reference that is set by simple types (integers, strings, ...) and updated all along the hierarchy. It would be a **LOT** faster)
+- Improve the neam (binray) backend to retrieve the same performances as before
 - Add a SpiderMonkey backend
-- Add deserialization to the JSON backend
-- Improve the way std::map/std::unordered_map are handled in the verbose / neam backends
-- remove the extra-copy (create the element in-place). (could be a lot faster on the deserialization benchmark).
-
 
 ## author
 Timothée Feuillet (_neam_ or _tim42_).
