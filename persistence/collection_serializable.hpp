@@ -26,6 +26,7 @@
 #ifndef __N_929154267943137924_1343703518__COLLECTION_SERIALIZABLE_HPP__
 # define __N_929154267943137924_1343703518__COLLECTION_SERIALIZABLE_HPP__
 
+#include <type_traits>
 #include <cstdint>
 #include <tools/allocation_transaction.hpp>
 #include <tools/memory_allocator.hpp>
@@ -36,6 +37,11 @@ namespace neam
   {
     namespace persistence_helper
     {
+      /// \brief Is the given type will give a string if it is used as a key
+      /// \note this is specialisable on the backend to allow fine grained, per backend, control.
+      /// The default is having everything giving a false result
+      template<typename Backend, typename Type> struct should_be_serialized_as_collection : public std::false_type {};
+
       /// \brief Serialize / Deserialize some data that could be interpreted as a collection of elements
       /// (dictionary, std::map/unordered_map, maybe even objects)
       /// The problem with that kind of thing is that the destination format can impose restrictions on the key type
@@ -56,6 +62,7 @@ namespace neam
           ///   bool Caller::from_memory_single_key(cr::allocation_transaction &transaction, Type *ptr, void *pair, const char *k_memory, size_t k_size, Params &&...k_p)
           ///   bool Caller::from_memory_single_value(cr::allocation_transaction &transaction, Type *ptr, void *pair, const char *v_memory, size_t v_size, Params &&...v_p)
           ///   bool Caller::from_memory_single_push_kv(cr::allocation_transaction &transaction, Type *ptr, void *pair) // always called last: push the generated pair to the collection
+          ///   bool Caller::from_memory_end(cr::allocation_transaction &transaction, Type *ptr) // always called at the very end
           template<typename... Params>
           static inline bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params && ... p)
           {

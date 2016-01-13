@@ -58,6 +58,8 @@ namespace neam
     <
       Backend,
 
+      my_class, // < the class type to handle
+
       // Embed in the template a call to the post-deserialization function
       // This function will be called just after the object has been deserialized
       N_CALL_POST_FUNCTION(my_class, N_EMBED(42)),

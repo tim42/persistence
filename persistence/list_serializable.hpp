@@ -48,6 +48,7 @@ namespace neam
           ///   bool Caller::from_memory_null(cr::allocation_transaction &transaction, Type *ptr) // When the size is 0 or no data is given
           ///   bool Caller::from_memory_allocate(cr::allocation_transaction &transaction, size_t size, Type *ptr) // When the number of element is known, to allocate the memory for them / call the constructor
           ///   bool Caller::from_memory_single(cr::allocation_transaction &transaction, Type *ptr, const char *sub_memory, size_t sub_size, size_t index, Params &&...p) // Handle the deserialization of a single element
+          ///   bool Caller::from_memory_end(cr::allocation_transaction &transaction, Type *ptr) // always called at the very end
           template<typename... Params>
           static inline bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params && ... p) 
           {

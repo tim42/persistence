@@ -42,16 +42,6 @@ namespace neam
     {
       namespace json
       {
-        /// \brief Is the given type will give a string if it is used as a key
-        template<typename Type> struct is_string_key : public std::false_type {};
-
-        template<> struct is_string_key<const char *> : public std::true_type {};
-        template<> struct is_string_key<char *> : public std::true_type {};
-        template<> struct is_string_key<char *const> : public std::true_type {};
-        template<> struct is_string_key<const char *const> : public std::true_type {};
-        template<typename CharT, typename Traits, typename Alloc> struct is_string_key<std::basic_string<CharT, Traits, Alloc>> : public std::true_type {};
-        template<typename CharT, typename Traits, typename Alloc> struct is_string_key<const std::basic_string<CharT, Traits, Alloc>> : public std::true_type {};
-
         static char hex_alphabet[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
         static inline std::string escape_string(const std::string &s)
         {

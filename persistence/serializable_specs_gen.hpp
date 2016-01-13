@@ -247,6 +247,12 @@ namespace neam
           return false;
         }
 
+        static inline bool from_memory_end(cr::allocation_transaction &, std::vector<Type, Alloc> *)
+        {
+          return true;
+        }
+
+
         static inline size_t to_memory_get_iterator(const std::vector<Type, Alloc> *)
         {
           return 0;
@@ -307,6 +313,12 @@ namespace neam
 
           return persistence::serializable<Backend, Type>::from_memory(transaction, sub_memory, sub_size, &((*array)[index]), std::forward<Params>(p)...);
         }
+
+        static inline bool from_memory_end(cr::allocation_transaction &, Type (*)[Size])
+        {
+          return true;
+        }
+
 
         static inline size_t to_memory_get_iterator(const Type (*)[Size])
         {
@@ -372,6 +384,12 @@ namespace neam
             return false;
           return persistence::serializable<Backend, Type>::from_memory(transaction, sub_memory, sub_size, &(ptr->array[index]), std::forward<Params>(p)...);
         }
+
+        static inline bool from_memory_end(cr::allocation_transaction &transaction, neam::array_wrapper<Type> *ptr)
+        {
+          return true;
+        }
+
 
         static inline size_t to_memory_get_iterator(const neam::array_wrapper<Type> *)
         {
@@ -520,6 +538,13 @@ namespace neam
           return true;
         }
 
+        static inline bool from_memory_end(cr::allocation_transaction &, std::map<Key, Value, Compare, Alloc> *)
+        {
+          return true;
+        }
+
+
+        static constexpr bool should_be_serialized_as_collection = neam::cr::persistence_helper::should_be_serialized_as_collection<Backend, Key>::value;
 
         static inline typename std::map<Key, Value, Compare, Alloc>::const_iterator to_memory_get_iterator(const std::map<Key, Value, Compare, Alloc> *ptr)
         {
@@ -636,6 +661,14 @@ namespace neam
           return true;
         }
 
+        static inline bool from_memory_end(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr)
+        {
+          return true;
+        }
+
+
+        static constexpr bool should_be_serialized_as_collection = neam::cr::persistence_helper::should_be_serialized_as_collection<Backend, Key>::value;
+
         static inline typename std::unordered_map<Key, Value, Hash, KeyEqual, Alloc>::const_iterator to_memory_get_iterator(const std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr)
         {
           return ptr->begin();
@@ -691,6 +724,8 @@ namespace neam
     class persistence::serializable<Backend, std::pair<First, Second>> : public persistence::serializable_object
     <
       Backend,
+
+      std::pair<First, Second>,
 
       NCRP_NAMED_TYPED_OFFSET(NCRP_TEMPLATE_CLASS(std::pair<First, Second>), first, names::_std__pair::first),
       NCRP_NAMED_TYPED_OFFSET(NCRP_TEMPLATE_CLASS(std::pair<First, Second>), second, names::_std__pair::second)

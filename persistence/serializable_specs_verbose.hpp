@@ -164,7 +164,7 @@ namespace neam
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
         /// \note the stored string doesn't have the null byte stored (as we store its size instead)
-        static bool to_memory(memory_allocator &mem, size_t &size, const char **ptr, size_t indent_level = 0, const char *name = nullptr)
+        static bool to_memory(memory_allocator &mem, size_t &size, const char *const*ptr, size_t indent_level = 0, const char *name = nullptr)
         {
           if (!*ptr)
             return internal::verbose::_allocate_format_string<char *>(mem, size, indent_level, name, "[nullptr]");
@@ -232,10 +232,10 @@ namespace neam
           }
       };
 
-      /// \brief Helper to [de]serialize collection-like objects
-      /// In this backend, this is exactly as the list serializer. (code re-use ftw).
       template<typename Type, typename Caller>
-      class collection_serializable<persistence_backend::verbose, Type, Caller> : public list_serializable<persistence_backend::verbose, Type, Caller> {};
+      class collection_serializable<persistence_backend::verbose, Type, Caller> : public list_serializable<persistence_backend::verbose, Type, Caller>
+      {
+      };
     } // namespace persistence_helper
 
     /// \brief this serialize complex objects (like classes)
@@ -243,8 +243,8 @@ namespace neam
     /// \param OffsetTypeList is a list of \code typed_offset <type, offsetof(my_class, member)> \endcode that could be simplified with the macro \code NRP_TYPPED_OFFSET(my_class, member) \endcode
     /// \note you still have to create a \code serializable \endcode specialization for the object, but you could simply use this trick: \code template<>class serializable<my_class> : public serializable_object<...> {}; \endcode
     /// \see constructible_serializable_object
-    template<typename... OffsetTypeList>
-    class persistence::serializable_object<persistence_backend::verbose, OffsetTypeList...>
+    template<typename Type, typename... OffsetTypeList>
+    class persistence::serializable_object<persistence_backend::verbose, Type, OffsetTypeList...>
     {
       public:
         /// \brief serialize the object

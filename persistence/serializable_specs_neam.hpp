@@ -268,7 +268,7 @@ namespace neam
               offset += elem_size;
             }
 
-            return true;
+            return Caller::from_memory_end(transaction, ptr);
           }
 
           /// \brief Called to serialize the list-object

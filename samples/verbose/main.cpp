@@ -92,6 +92,8 @@ namespace neam
     <
       Backend, // < the backend (here: all backends)
 
+      my_class, // < the class type to handle
+
       // simply list here the members you want to serialize / deserialize
       NCRP_NAMED_TYPED_OFFSET(my_class, s_int, names::my_class::s_int),
       NCRP_NAMED_TYPED_OFFSET(my_class, s_double, names::my_class::s_double),
@@ -109,6 +111,8 @@ namespace neam
     template<typename Backend> class persistence::serializable<Backend, my_struct> : public persistence::serializable_object
     <
       Backend, // < the backend (here: all backends)
+
+      my_struct, // < the class type to handle
 
       // simply list here the members you want to serialize / deserialize
       NCRP_NAMED_TYPED_OFFSET(my_struct, s_int, names::my_struct::s_int),

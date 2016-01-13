@@ -91,6 +91,8 @@ namespace neam
     <
       Backend, // < the backend (here: all backends)
 
+      my_class, // < the class type to handle
+
       // Embed in the template a call to the post-deserialization function
       // This function will be called just after the object has been deserialized
       N_CALL_POST_FUNCTION(my_class, N_EMBED(42)),
@@ -107,6 +109,8 @@ namespace neam
     template<typename Backend> class persistence::serializable<Backend, my_struct> : public persistence::serializable_object
     <
       Backend, // < the backend (here: all backends)
+
+      my_struct, // < the class type to handle
 
       // simply list here the members you want to serialize / deserialize
       NCRP_NAMED_TYPED_OFFSET(my_struct, s_int, names::my_struct::s_int),

@@ -31,16 +31,19 @@
 #include <cstring>
 #include <new>
 #include <vector>
+#include <iostream>
+
 #include <tools/execute_pack.hpp>
 #include <tools/embed.hpp>              // embed data as types (for use in templates)
 #include <tools/constructor_call.hpp>   // embed constructor in templates :)
 #include <tools/memory_allocator.hpp>
 #include <tools/allocation_transaction.hpp>
 
-#include "raw_data.hpp"
-
-#include <iostream>
 #include <tools/demangle.hpp>
+
+#include "raw_data.hpp"
+#include "list_serializable.hpp"
+#include "collection_serializable.hpp"
 
 /// \file object.hpp
 /// \brief this file provide generic way to serialize / deserialize C++ objects (\e recursively) with a minimum of runtime impact
@@ -136,7 +139,7 @@ namespace neam
         {
           public:
             /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
-            static inline bool default_initializer(cr::allocation_transaction &, Type *ptr)
+            static inline bool default_initializer(cr::allocation_transaction &, Type *)
             {
               return false;
             }
@@ -146,12 +149,9 @@ namespace neam
             /// \param[in] size the size of the memory area
             /// \param[out] ptr a pointer to the object (the one that the function will fill)
             /// \return true if successful
-            static bool from_memory(cr::allocation_transaction &, const char *memory, size_t size, Type *ptr)
+            static bool from_memory(cr::allocation_transaction &, const char *, size_t , Type *)
             {
-              if (size != sizeof(Type))
-                return false;
-              *ptr = *reinterpret_cast<const Type *>(memory);
-              return true;
+              return false;
             }
 
             /// \brief serialize the object
@@ -159,90 +159,168 @@ namespace neam
             /// \param[out] size the size of the memory area
             /// \param[in] ptr a pointer to the object (the one that the function will serialize)
             /// \return true if successful
-            static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr)
+            static bool to_memory(memory_allocator &, size_t &, const Type *)
             {
-              size = sizeof(Type);
-              char *memory = reinterpret_cast<char *>(mem.allocate(size));
-              if (!memory)
-                return false;
-              *reinterpret_cast<Type *>(memory) = *ptr;
-              return true;
+              return false;
             }
         };
 
-        /// \brief this serialize complex objects (like classes)
+        /// \brief this serialize objects (like classes) properties per properties
         /// this generate meta-data used to generate code that will fill the object.
         /// \param OffsetTypeList is a list of \code typed_offset <type, offsetof(my_class, member)> \endcode that could be simplified with the macro \code NRP_TYPPED_OFFSET(my_class, member) \endcode
-        /// \note you still have to create a \code serializable \endcode specialization for the object, but you could simply use this trick: \code template<>class serializable<my_class> : public serializable_object<...> {}; \endcode
         /// \see constructible_serializable_object
-        template<typename Backend, typename... OffsetTypeList>
+        /// \note This is the generic implementation: a backend agnostic implementation that plugs into a collection_serializable
+        template<typename Backend, typename Type, typename... OffsetTypeList>
         class serializable_object
+          : public persistence_helper::collection_serializable<Backend, Type, serializable_object<Backend, Type, OffsetTypeList...>>
         {
           public:
-            /// \brief deserialize the object
-            /// \param[in] memory the serialized object
-            /// \param[in] size the size of the memory area
-            /// \param[out] ptr a pointer to the object (the one that the function will fill)
-            /// \return true if successful
-            static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, void *ptr)
+            static bool default_initializer(cr::allocation_transaction &, Type *)
             {
-              size_t mem_offset = 0;
-              bool res = true;
-              NEAM_EXECUTE_PACK((res &= from_memory_single<OffsetTypeList>(transaction, memory, size, ptr, mem_offset))); // the magic
-              return res;
+              return false; // TODO
             }
 
-            /// \brief serialize the object
-            /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-            /// \param[out] size the size of the memory area
-            /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-            /// \return true if successful
-            static bool to_memory(memory_allocator &mem, size_t &size, const void *ptr)
+            static inline bool from_memory_null(cr::allocation_transaction &, Type *) // When the size is 0 or no data is given
             {
-              bool res = true;
-
-              NEAM_EXECUTE_PACK((res &= to_memory_single<OffsetTypeList>(ptr, size, mem, res)));
-
-              if (!res)
-                return false;
-
+              // TODO: default initialize all fields
               return true;
             }
 
-          private:
-            template<typename OffsetType>
-            static inline bool from_memory_single(cr::allocation_transaction &transaction, const char *memory, size_t size, void *ptr, size_t &offset)
+            static inline bool from_memory_allocate(cr::allocation_transaction &, size_t, Type *)
             {
-              if (offset + sizeof(uint32_t) > size)
-                return false;
+              // it's an object !
+              return true;
+            }
 
-              uint32_t element_size = *reinterpret_cast<const uint32_t *>(memory + offset);
+            // Here we do something else: we just retrieve the property and uses its index to retrieve its position
+            template<typename... Params>
+            static inline bool from_memory_single(cr::allocation_transaction &transaction, Type *ptr, const char *sub_memory, size_t sub_size, size_t index, Params && ...p)
+            {
+              bool res = true;
+              size_t i = 0;
 
-              offset += sizeof(uint32_t);
-              if (offset + element_size > size)
-                return false;
+              // Sorry.
+              NEAM_EXECUTE_PACK(
+                res &= ((res && i++ == index) ?
+                  persistence::serializable<Backend, typename OffsetTypeList::type>::from_memory(transaction, sub_memory, sub_size, reinterpret_cast<typename OffsetTypeList::type *>(reinterpret_cast<uint8_t *>(ptr) + OffsetTypeList::offset), std::forward<Params>(p)...)
+                : true)
+              );
 
-              bool res = serializable<Backend, typename OffsetType::type>::from_memory(transaction, memory + offset, element_size, reinterpret_cast<typename OffsetType::type *>(reinterpret_cast<uint8_t *>(ptr) + OffsetType::offset));
-
-              offset += element_size;
               return res;
             }
 
-            template<typename OffsetType>
-            static inline bool to_memory_single(const void *ptr, size_t &global_size, memory_allocator &mem, bool success)
+            template<typename... Params>
+            static inline size_t from_memory_get_kv_pair_size(Type *)
             {
-              if (!success)
+              return sizeof(int); // We only hold an index
+            }
+
+            template<typename... Params>
+            static inline bool from_memory_single_key(cr::allocation_transaction &, Type *, void *pair, const char *k_memory, size_t k_size, Params && ...k_p)
+            {
+              int *index = reinterpret_cast<int *>(pair);
+              *index = -1; // not found
+              char *name = nullptr;
+              cr::allocation_transaction temp_transaction;
+              if (persistence::serializable<Backend, char *>::from_memory(temp_transaction, k_memory, k_size, &name, std::forward<Params>(k_p)...))
+              {
+                size_t key_size = strlen(name);
+
+                // GET INDEX
+                size_t i = 0;
+                // Sorry.
+                NEAM_EXECUTE_PACK(
+                  ((*index == -1 && ++i && OffsetTypeList::name_len == key_size && !memcmp(name, OffsetTypeList::name, key_size)) ?
+                    *index = int(i) - 1
+                  : 0)
+                );
+                temp_transaction.rollback();
+                return true;
+              }
+              temp_transaction.rollback();
+              return false;
+            }
+
+            template<typename... Params>
+            static inline bool from_memory_single_value(cr::allocation_transaction &transaction, Type *ptr, void *pair, const char *v_memory, size_t v_size, Params && ...v_p)
+            {
+              int *index = reinterpret_cast<int *>(pair);
+              if (*index != -1)
+                return from_memory_single(transaction, ptr, v_memory, v_size, *index, std::forward<Params>(v_p)...);
+              return true;
+            }
+
+            static inline bool from_memory_single_push_kv(cr::allocation_transaction &, Type *, void *)
+            {
+              return true;
+            }
+
+            static inline bool from_memory_end(cr::allocation_transaction &, Type *)
+            {
+              // TODO: default initialize fields
+              return true;
+            }
+
+
+            static constexpr bool should_be_serialized_as_collection = neam::cr::persistence_helper::should_be_serialized_as_collection<Backend, const char *>::value;
+
+            static inline size_t to_memory_get_iterator(const Type *)
+            {
+              return 0;
+            }
+
+            static inline size_t to_memory_get_element_count(const Type *)
+            {
+              return sizeof...(OffsetTypeList);
+            }
+
+            static inline bool to_memory_increment_iterator(size_t &it)
+            {
+              ++it;
+              return true;
+            }
+
+            template<typename... Params>
+            static inline bool to_memory_single(memory_allocator &mem, size_t &size, size_t &it, const Type *ptr, Params && ... p)
+            {
+              if (it >= sizeof...(OffsetTypeList))
                 return false;
+              bool res = true;
+              size_t i = 0;
+              // Sorry.
+              NEAM_EXECUTE_PACK(
+                res &= ((res && i++ == it) ?
+                  persistence::serializable<Backend, typename OffsetTypeList::type>::to_memory(mem, size, reinterpret_cast<const typename OffsetTypeList::type *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetTypeList::offset), std::forward<Params>(p)...)
+                : true)
+              );
+              return res;
+            }
 
-              size_t element_size = 0;
-
-              uint32_t *size_memory = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
-
-              if (!serializable<Backend, typename OffsetType::type>::to_memory(mem, element_size, reinterpret_cast<const typename OffsetType::type *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetType::offset)))
+            template<typename... Params>
+            static inline bool to_memory_single_key(memory_allocator &mem, size_t &size, size_t &it, const Type *, Params && ... p)
+            {
+              if (it >= sizeof...(OffsetTypeList))
                 return false;
+              bool res = true;
+              size_t i = 0;
+              // Sorry.
+              NEAM_EXECUTE_PACK(
+                res &= ((res && i++ == it) ?
+                  persistence::serializable<Backend, char *>::to_memory(mem, size, &OffsetTypeList::name, std::forward<Params>(p)...)
+                : true)
+              );
+              return res;
+            }
 
-              *size_memory = element_size;
-              global_size += element_size + sizeof(uint32_t);
+            template<typename... Params>
+            static inline bool to_memory_single_value(memory_allocator &mem, size_t &size, size_t &it, const Type *ptr, Params && ... p)
+            {
+              return to_memory_single(mem, size, it, ptr, std::forward<Params>(p)...);
+            }
+
+            static inline bool to_memory_end_iterator(size_t &)
+            {
+              // TODO: default init
               return true;
             }
         };
@@ -254,11 +332,11 @@ namespace neam
         /// \see class serializable_object
         /// \see neam::ct::constructor
         /// \see N_CALL_POST_FUNCTION
-        template<typename Backend, typename ConstructorCall, typename... OffsetTypeList>
+        template<typename Backend, typename Type, typename ConstructorCall, typename... OffsetTypeList>
         class constructible_serializable_object
         {
           private:
-            using object_t = typename neam::ct::type_at_index<0, OffsetTypeList...>::type;
+            using object_t = Type;
 
           public:
             /// \brief deserialize the object
@@ -267,9 +345,9 @@ namespace neam
             /// \param[out] ptr a pointer to the object (the one that the function will fill)
             /// \return true if successful
             template<typename... Params>
-            static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, void *ptr, Params &&... p)
+            static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params &&... p)
             {
-              if (!serializable_object<Backend, OffsetTypeList...>::from_memory(transaction, memory, size, ptr, std::forward<Params>(p)...))
+              if (!serializable_object<Backend, Type, OffsetTypeList...>::from_memory(transaction, memory, size, ptr, std::forward<Params>(p)...))
                 return false;
 
               // call the constructor of the newly-initialized object (magic ?)
@@ -284,10 +362,10 @@ namespace neam
             /// \param[in] ptr a pointer to the object (the one that the function will serialize)
             /// \return true if successful
             template<typename... Params>
-            static bool to_memory(memory_allocator &mem, size_t &size, const void *ptr, Params &&... p)
+            static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params &&... p)
             {
               // simply forward to serializable_object as we don't have to do anything here.
-              return serializable_object<Backend, OffsetTypeList...>::to_memory(mem, size, ptr, std::forward<Params>(p)...);
+              return serializable_object<Backend, Type, OffsetTypeList...>::to_memory(mem, size, ptr, std::forward<Params>(p)...);
             }
         };
 
@@ -304,6 +382,7 @@ namespace neam
           constexpr static size_t offset = Offset;
           constexpr static const char *name = Name;
           constexpr static bool absolute_offset = AbsoluteOffset;
+          constexpr static size_t name_len = neam::ct::strlen(Name);
         };
 
 /// \brief this is quite "crade", isn't it ?? (this is the version with a pointer to member of the so famous C macro)
@@ -368,9 +447,6 @@ namespace neam
 
   } // namespace cr
 } // namespace neam
-
-#include "list_serializable.hpp"
-#include "collection_serializable.hpp"
 
 #include "serializable_specs_gen.hpp"
 
