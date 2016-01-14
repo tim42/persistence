@@ -377,8 +377,8 @@ namespace neam
     /// \brief Helper to [de]serialize list-like objects
     namespace persistence_helper
     {
-      template<typename Type, typename Caller>
-      class list_serializable<persistence_backend::json, Type, Caller>
+      template<typename Type, typename Caller, serializable_mode Mode>
+      class list_serializable<persistence_backend::json, Type, Caller, Mode>
       {
         public:
           /// \brief Called to deserialize the list-object
@@ -509,15 +509,15 @@ namespace neam
 
       /// \brief Helper to [de]serialize collection-like objects
       /// In this backend, this is exactly as the list serializer. (code re-use ftw).
-      template<typename Type, typename Caller>
-      class collection_serializable<persistence_backend::json, Type, Caller>
+      template<typename Type, typename Caller, serializable_mode Mode>
+      class collection_serializable<persistence_backend::json, Type, Caller, Mode>
       {
         public:
           static inline bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, Type *ptr)
           {
             internal::json::types type = internal::json::get_type(memory[0]);
             if (type == internal::json::types::list)
-              return list_serializable<persistence_backend::json, Type, Caller>::from_memory(transaction, memory, size, ptr);
+              return list_serializable<persistence_backend::json, Type, Caller, Mode>::from_memory(transaction, memory, size, ptr);
             if (type != internal::json::types::collection)
               return false;
 
@@ -528,8 +528,8 @@ namespace neam
               return false;
 
             // I know that this is unforgivable, but I want to have an object without dynamic allocation and without calling its constructor
-            int8_t temp_memory[Caller::from_memory_get_kv_pair_size(ptr)];
-            void *temp_memory_ptr = temp_memory;
+            int8_t temp_memory[sizeof(typename Caller::kv_instance_t)];
+            typename Caller::kv_instance_t *temp_memory_ptr = reinterpret_cast<typename Caller::kv_instance_t *>(temp_memory);
 
             size_t index = 0;
             if (memory[0] == '"' || internal::json::advance_next(memory, size, index))
@@ -573,10 +573,10 @@ namespace neam
             return Caller::from_memory_end(transaction, ptr);
           }
 
-          static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, size_t indent_level = 0)
+          static inline bool to_memory(NCR_ENABLE_IF(!(Mode & to_memory_compiletime), memory_allocator) &mem, size_t &size, const Type *ptr, size_t indent_level = 0)
           {
             if (!Caller::should_be_serialized_as_collection)
-              return list_serializable<persistence_backend::json, Type, Caller>::to_memory(mem, size, ptr, indent_level);
+              return list_serializable<persistence_backend::json, Type, Caller, Mode>::to_memory(mem, size, ptr, indent_level);
 
             size_t whole_object_size = 0;
 
@@ -623,6 +623,68 @@ namespace neam
             if (!internal::json::_allocate_string(mem, whole_object_size, indent_level, "}"))
               return false;
             size = whole_object_size;
+            return true;
+          }
+
+          // compile time to_memory
+          static inline bool to_memory(NCR_ENABLE_IF((Mode & to_memory_compiletime) != 0, memory_allocator) &mem, size_t &size, const Type *ptr, size_t indent_level = 0)
+          {
+            if (!Caller::should_be_serialized_as_collection)
+              return list_serializable<persistence_backend::json, Type, Caller, Mode>::to_memory(mem, size, ptr, indent_level);
+
+            size_t whole_object_size = 0;
+
+            if (!internal::json::_allocate_string(mem, whole_object_size, 0, "{\n"))
+              return false;
+
+            constexpr size_t element_count = Caller::compile_time_t::size;
+
+            if (!ct_to_memory_loop(gen_seq<element_count>(), mem, whole_object_size, ptr, indent_level))
+              return false;
+
+            if (!internal::json::_allocate_string(mem, whole_object_size, 0, "\n"))
+              return false;
+            if (!internal::json::_allocate_string(mem, whole_object_size, indent_level, "}"))
+              return false;
+            size = whole_object_size;
+            return true;
+          }
+
+        private: // compile time thingies:
+          template<size_t... Indexes>
+          static inline bool ct_to_memory_loop(seq<Indexes...>, NCR_ENABLE_IF((Mode & to_memory_compiletime) != 0, memory_allocator) &mem, size_t &size, const Type *ptr, size_t indent_level)
+          {
+            bool res = true;
+            NEAM_EXECUTE_PACK(
+              (res &= ct_to_memory_single<Indexes>(mem, size, ptr, indent_level))
+            );
+            return res;
+          }
+          template<size_t Index>
+          static inline bool ct_to_memory_single(NCR_ENABLE_IF((Mode & to_memory_compiletime) != 0, memory_allocator) &mem, size_t &size, const Type *ptr, size_t indent_level)
+          {
+            if (Index != 0) // Yay ! compile time switch !
+            {
+              if (!internal::json::_allocate_string(mem, size, 0, ",\n"))
+                return false;
+            }
+            if (!internal::json::_allocate_string(mem, size, indent_level + 1, ""))
+              return false;
+            size_t sz = 0;
+            if (!Caller::compile_time_t::template get_type<Index>::to_memory_single_key(mem, sz, ptr, indent_level + 1))
+              return false;
+
+            size += sz;
+
+            if (!internal::json::_allocate_string(mem, size, 0, ":"))
+              return false;
+
+            sz = 0;
+
+            if (!Caller::compile_time_t::template get_type<Index>::to_memory_single_value(mem, sz, ptr, indent_level + 1))
+              return false;
+
+            size += sz;
             return true;
           }
       };

@@ -232,8 +232,8 @@ namespace neam
           }
       };
 
-      template<typename Type, typename Caller>
-      class collection_serializable<persistence_backend::verbose, Type, Caller> : public list_serializable<persistence_backend::verbose, Type, Caller>
+      template<typename Type, typename Caller, serializable_mode Mode>
+      class collection_serializable<persistence_backend::verbose, Type, Caller, Mode> : public list_serializable<persistence_backend::verbose, Type, Caller, Mode>
       {
       };
     } // namespace persistence_helper

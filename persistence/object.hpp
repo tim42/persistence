@@ -38,6 +38,7 @@
 #include <tools/constructor_call.hpp>   // embed constructor in templates :)
 #include <tools/memory_allocator.hpp>
 #include <tools/allocation_transaction.hpp>
+#include <tools/ct_string.hpp>
 
 #include <tools/demangle.hpp>
 
@@ -172,18 +173,71 @@ namespace neam
         /// \note This is the generic implementation: a backend agnostic implementation that plugs into a collection_serializable
         template<typename Backend, typename Type, typename... OffsetTypeList>
         class serializable_object
-          : public persistence_helper::collection_serializable<Backend, Type, serializable_object<Backend, Type, OffsetTypeList...>>
+          : public persistence_helper::collection_serializable<Backend, Type, serializable_object<Backend, Type, OffsetTypeList...>, persistence_helper::compiletime>
         {
           public:
+            /// \brief We're using this 'cause this allow us to forward the OffsetTypeList to the collection_serializable specification at compile time
+            template<typename OffsetType>
+            struct sub_compile_time_t
+            {
+              using type_t = typename OffsetType::type;
+
+              template<typename... Params>
+              static inline bool from_memory_single(cr::allocation_transaction &transaction, Type *ptr, const char *sub_memory, size_t sub_size, Params && ...p)
+              {
+                return from_memory_single_value(transaction, ptr, sub_memory, sub_size, std::forward<Params>(p)...);
+              }
+
+              template<typename... Params>
+              static inline bool from_memory_single_key(cr::allocation_transaction &, Type *, const char *, size_t , Params && ...)
+              {
+                return true; // Well.
+              }
+
+              template<typename... Params>
+              static inline bool from_memory_single_value(cr::allocation_transaction &transaction, Type *ptr, const char *v_memory, size_t v_size, Params && ...v_p)
+              {
+                return persistence::serializable<Backend, type_t>::from_memory(transaction, v_memory, v_size, reinterpret_cast<type_t *>(reinterpret_cast<uint8_t *>(ptr) + OffsetType::offset), std::forward<Params>(v_p)...);
+              }
+
+
+              template<typename... Params>
+              static inline bool to_memory_single(memory_allocator &mem, size_t &size, const Type *ptr, Params && ... p)
+              {
+                return to_memory_single_value(mem, size, ptr, std::forward<Params>(p)...);
+              }
+
+              template<typename... Params>
+              static inline bool to_memory_single_key(memory_allocator &mem, size_t &size, const Type *, Params && ... p)
+              {
+                return persistence::serializable<Backend, char *>::to_memory(mem, size, &OffsetType::name, std::forward<Params>(p)...);
+              }
+
+              template<typename... Params>
+              static inline bool to_memory_single_value(memory_allocator &mem, size_t &size, const Type *ptr, Params && ... p)
+              {
+                return persistence::serializable<Backend, type_t>::to_memory(mem, size, reinterpret_cast<const type_t *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetType::offset), std::forward<Params>(p)...);
+              }
+            };
+
+            /// \brief The compile time struct
+            using compile_time_t = neam::ct::type_list<sub_compile_time_t<OffsetTypeList>...>;
+
             static bool default_initializer(cr::allocation_transaction &, Type *)
             {
-              return false; // TODO
+              return false;
+//               bool res = true;
+//               NEAM_EXECUTE_PACK(
+//                 res &= (
+//                   persistence::serializable<Backend, typename OffsetTypeList::type>::default_initializer(transaction, reinterpret_cast<typename OffsetTypeList::type *>(reinterpret_cast<uint8_t *>(ptr) + OffsetTypeList::offset))
+//                 )
+//               );
+//               return res;
             }
 
-            static inline bool from_memory_null(cr::allocation_transaction &, Type *) // When the size is 0 or no data is given
+            static inline bool from_memory_null(cr::allocation_transaction &transaction, Type *ptr) // When the size is 0 or no data is given
             {
-              // TODO: default initialize all fields
-              return true;
+              return default_initializer(transaction, ptr);
             }
 
             static inline bool from_memory_allocate(cr::allocation_transaction &, size_t, Type *)
@@ -209,11 +263,7 @@ namespace neam
               return res;
             }
 
-            template<typename... Params>
-            static inline size_t from_memory_get_kv_pair_size(Type *)
-            {
-              return sizeof(int); // We only hold an index
-            }
+            using kv_instance_t = int;
 
             template<typename... Params>
             static inline bool from_memory_single_key(cr::allocation_transaction &, Type *, void *pair, const char *k_memory, size_t k_size, Params && ...k_p)
@@ -350,8 +400,15 @@ namespace neam
               if (!serializable_object<Backend, Type, OffsetTypeList...>::from_memory(transaction, memory, size, ptr, std::forward<Params>(p)...))
                 return false;
 
-              // call the constructor of the newly-initialized object (magic ?)
-              ConstructorCall::forward_to(reinterpret_cast<typename ConstructorCall::type *>(ptr), &ConstructorCall::type::post_deserialization);
+              try
+              {
+                // call the post-deserialization callbacl of the newly-initialized object (magic ?)
+                ConstructorCall::forward_to(reinterpret_cast<typename ConstructorCall::type *>(ptr), &ConstructorCall::type::post_deserialization);
+              }
+              catch (...)
+              {
+                return false;
+              }
 
               return true;
             }
@@ -385,8 +442,13 @@ namespace neam
           constexpr static size_t name_len = neam::ct::strlen(Name);
         };
 
-/// \brief this is quite "crade", isn't it ?? (this is the version with a pointer to member of the so famous C macro)
+// NOTE: GCC issues a warning for offsetof() usage on some objects (but still, the code works).
+//       Clang issues an error for the GCC solution, so, this is the reason for that switch
+#if defined(__GNUC__) && !defined(__clang__)
 #define N__OFFSETOF(class, member)                              reinterpret_cast<size_t>(&(reinterpret_cast<class *>(0)->member))
+#else
+#define N__OFFSETOF(class, member)                              offsetof(class, member)
+#endif
 
 /// \brief an helper for template classes (that CPP doesn't like as macro argument...)
 #ifdef IN_IDE_PARSER // sorry :(
@@ -427,10 +489,6 @@ namespace neam
 /// \brief declare a variable that will hold the name of the field
 /// \note be careful with the namespaces !
 #define NCRP_DECLARE_NAME(class, name)                          namespace names{namespace class{ constexpr neam::string_t name __attribute__((used)) = #name; }}
-
-// G++ complain... :/
-// #define NCRP_TYPED_OFFSET(class, member)                 neam::cr::persistence::typed_offset<decltype(class::member), offsetof(class, member)>
-// #define NCRP_OFFSET(type, class, member)                 neam::cr::persistence::typed_offset<type, offsetof(class, member)>
 
 /// \brief like NCRP_TYPED_OFFSET, but surround the computed type with a wrapper (like \e checksum or \e magic)
 #define NCRP_WRAPPED_TYPED_OFFSET(class, member, wrapper, ...)  neam::cr::persistence::typed_offset<wrapper<decltype(class::member), ##__VA_ARGS__>, class, N__OFFSETOF(class, member)>

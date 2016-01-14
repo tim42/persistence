@@ -27,10 +27,13 @@
 # define __N_331927306113683385_1782336113__SERIALIZABLE_SPECS_HPP__
 
 #include <type_traits>
+#include <tools/enable_if.hpp>
 #include <tools/array_wrapper.hpp>
 #include <tools/endianness.hpp>
 #include "object.hpp" // for my IDE
 #include "raw_data.hpp"
+
+
 
 namespace neam
 {
@@ -89,29 +92,31 @@ namespace neam
         /// \return true if successful
         static inline bool from_memory(cr::allocation_transaction &, const char *memory, size_t size, Type *ptr)
         {
-          if (size > sizeof(uint64_t) || (size & 1) != 0)
-            return false;
           if (size == sizeof(Type))
             *ptr = ct::letoh(*reinterpret_cast<const Type *>(memory));
           else
           {
-            if (size == sizeof(uint8_t)) // no 1 byte FP
-              *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint8_t, int8_t>::type *>(memory));
-            else if (size == sizeof(uint16_t)) // no 2 bytes FP
-              *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint16_t, int16_t>::type *>(memory));
-            else if (size == sizeof(uint32_t))
+            switch (size)
             {
-              if (std::is_floating_point<Type>())
-                *ptr = ct::letoh(*reinterpret_cast<const float *>(memory));
-              else
-                *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint32_t, int32_t>::type *>(memory));
-            }
-            else if (size == sizeof(uint64_t))
-            {
-              if (std::is_floating_point<Type>())
-                *ptr = ct::letoh(*reinterpret_cast<const double *>(memory));
-              else
-                *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint64_t, int64_t>::type *>(memory));
+              case sizeof(uint8_t):
+                *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint8_t, int8_t>::type *>(memory));
+                break;
+              case sizeof(uint16_t):
+                *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint16_t, int16_t>::type *>(memory));
+                break;
+              case sizeof(uint32_t):
+                if (std::is_floating_point<Type>())
+                  *ptr = ct::letoh(*reinterpret_cast<const float *>(memory));
+                else
+                  *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint32_t, int32_t>::type *>(memory));
+                break;
+              case sizeof(uint64_t):
+                if (std::is_floating_point<Type>())
+                  *ptr = ct::letoh(*reinterpret_cast<const double *>(memory));
+                else
+                  *ptr = ct::letoh(*reinterpret_cast<const typename std::conditional<std::is_unsigned<Type>::value, uint64_t, int64_t>::type *>(memory));
+              default:
+                return false;
             }
           }
           return true;
@@ -125,10 +130,10 @@ namespace neam
         static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr)
         {
           size = sizeof(Type);
-          char *memory = reinterpret_cast<char *>(mem.allocate(size));
+          Type *memory = reinterpret_cast<Type *>(mem.allocate(size));
           if (!memory)
             return false;
-          *reinterpret_cast<Type *>(memory) = ct::htole(*ptr);
+          *memory = ct::htole(*ptr);
           return true;
         }
     };
@@ -220,7 +225,7 @@ namespace neam
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
         /// \note the stored string doesn't have the null byte stored (as we store its size instead)
-        static inline bool to_memory(memory_allocator &mem, size_t &size, const char **ptr)
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const char *const*ptr)
         {
           size = strlen(*ptr);
           char *memory = reinterpret_cast<char *>(mem.allocate(size));
@@ -233,8 +238,8 @@ namespace neam
     /// \brief Helper to [de]serialize list-like & collection-like objects
     namespace persistence_helper
     {
-      template<typename Type, typename Caller>
-      class list_serializable<persistence_backend::neam, Type, Caller>
+      template<typename Type, typename Caller, serializable_mode Mode>
+      class list_serializable<persistence_backend::neam, Type, Caller, Mode>
       {
         public:
           /// \brief Called to deserialize the list-object
@@ -271,8 +276,9 @@ namespace neam
             return Caller::from_memory_end(transaction, ptr);
           }
 
+
           /// \brief Called to serialize the list-object
-          static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr)
+          static inline bool to_memory(NCR_ENABLE_IF(!(Mode & to_memory_compiletime), memory_allocator) &mem, size_t &size, const Type *ptr)
           {
             uint32_t whole_object_size = sizeof(uint32_t);
 
@@ -299,13 +305,49 @@ namespace neam
             return true;
           }
 
-        private:
+          static inline bool to_memory(NCR_ENABLE_IF((Mode & to_memory_compiletime) != 0, memory_allocator) &mem, size_t &size, const Type *ptr)
+          {
+            size_t whole_object_size = sizeof(uint32_t);
+
+            constexpr size_t element_count = Caller::compile_time_t::size;
+            *reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t))) = element_count;
+
+            // This is way faster: no loops, type agnostic, ...
+            if (!ct_to_memory_loop(gen_seq<element_count>(), mem, whole_object_size, ptr))
+              return false;
+
+            size = whole_object_size;
+            return true;
+          }
+
+        private: // compile time thingies:
+          template<size_t... Indexes>
+          static inline bool ct_to_memory_loop(seq<Indexes...>, NCR_ENABLE_IF((Mode & to_memory_compiletime) != 0, memory_allocator) &mem, size_t &size, const Type *ptr)
+          {
+            bool res = true;
+            NEAM_EXECUTE_PACK(
+              (res &= ct_to_memory_single<Indexes>(mem, size, ptr))
+            );
+            return res;
+          }
+          template<size_t Index>
+          static inline bool ct_to_memory_single(NCR_ENABLE_IF((Mode & to_memory_compiletime) != 0, memory_allocator) &mem, size_t &size, const Type *ptr)
+          {
+            size_t tmp_size = 0;
+            uint32_t *size_memory = reinterpret_cast<uint32_t *>(mem.allocate(sizeof(uint32_t)));
+            if (!Caller::compile_time_t::template get_type<Index>::to_memory_single(mem, tmp_size, ptr))
+              return false;
+            *size_memory = tmp_size;
+            size += tmp_size + sizeof(uint32_t);
+            return true;
+          }
       };
 
       /// \brief Helper to [de]serialize collection-like objects
-      /// In this backend, this is exactly as the list serializer. (code re-use ftw).
-      template<typename Type, typename Caller>
-      class collection_serializable<persistence_backend::neam, Type, Caller> : public list_serializable<persistence_backend::neam, Type, Caller> {};
+      template<typename Type, typename Caller, serializable_mode Mode>
+      class collection_serializable<persistence_backend::neam, Type, Caller, Mode> : public list_serializable<persistence_backend::neam, Type, Caller, Mode>
+      {
+      };
     } // namespace persistence_helper
   } // namespace r
 } // namespace neam

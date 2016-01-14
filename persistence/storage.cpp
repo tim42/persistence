@@ -74,7 +74,7 @@ bool neam::cr::storage::_write_to_file(const std::string &name, char *memory, si
   if (!mapped_file)
     mapped_file = new std::map<std::string, raw_data>;
   mapped_file->erase(name);
-  mapped_file->emplace(name, std::move(raw_data(size, reinterpret_cast<int8_t *>(memory), neam::force_duplicate)));
+  mapped_file->emplace(name, (raw_data(size, reinterpret_cast<int8_t *>(memory), neam::force_duplicate)));
 
   _sync();
   return true;

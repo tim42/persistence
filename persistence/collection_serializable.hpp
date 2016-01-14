@@ -31,6 +31,8 @@
 #include <tools/allocation_transaction.hpp>
 #include <tools/memory_allocator.hpp>
 
+#include "list_serializable.hpp"
+
 namespace neam
 {
   namespace cr
@@ -47,7 +49,7 @@ namespace neam
       /// The problem with that kind of thing is that the destination format can impose restrictions on the key type
       /// and thus, the system have to support both a JSON like {"key": [value], ...} structure and a more generic array of std::pair< Key, value >
       /// if the key type can't be used as a key in the output format.
-      template<typename Backend, typename Type, typename Caller>
+      template<typename Backend, typename Type, typename Caller, serializable_mode Mode = serializable_mode::runtime>
       class collection_serializable
       {
         public:
@@ -64,7 +66,7 @@ namespace neam
           ///   bool Caller::from_memory_single_push_kv(cr::allocation_transaction &transaction, Type *ptr, void *pair) // always called last: push the generated pair to the collection
           ///   bool Caller::from_memory_end(cr::allocation_transaction &transaction, Type *ptr) // always called at the very end
           template<typename... Params>
-          static inline bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params && ... p)
+          static inline bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params && ... )
           {
             (void)transaction;
             (void)memory;
@@ -84,7 +86,7 @@ namespace neam
           ///     then
           ///   bool Caller::to_memory_end_iterator(Caller::IteratorType &it)
           template<typename... Params>
-          static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params && ... p)
+          static inline bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params && ... )
           {
             (void)mem;
             (void)size;

@@ -162,7 +162,7 @@ namespace neam
     {
       public:
         /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
-        static inline bool default_initializer(cr::allocation_transaction &, Type *&ptr)
+        static inline bool default_initializer(cr::allocation_transaction &, Type *&)
         {
           return false;
         }
@@ -204,7 +204,8 @@ namespace neam
     };
 
     template<typename Backend, typename Type, typename Alloc>
-    class persistence::serializable<Backend, std::vector<Type, Alloc>> : public persistence_helper::list_serializable<Backend, std::vector<Type, Alloc>, persistence::serializable<Backend, std::vector<Type, Alloc>>>
+    class persistence::serializable<Backend, std::vector<Type, Alloc>>
+          : public persistence_helper::list_serializable<Backend, std::vector<Type, Alloc>, persistence::serializable<Backend, std::vector<Type, Alloc>>>
     {
       public:
         /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
@@ -233,7 +234,7 @@ namespace neam
         template<typename... Params>
         static inline bool from_memory_single(cr::allocation_transaction &transaction, std::vector<Type, Alloc> *ptr, const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
         {
-          int8_t data[sizeof(Type)] = {0};
+          int8_t data[sizeof(Type)];
           Type *dptr = reinterpret_cast<Type *>(data);
 
           if (index != ptr->size())
@@ -284,7 +285,8 @@ namespace neam
     };
 
     template<typename Backend, typename Type, size_t Size>
-    class persistence::serializable<Backend, Type[Size]> : public persistence_helper::list_serializable<Backend, Type[Size], persistence::serializable<Backend, Type[Size]>>
+    class persistence::serializable<Backend, Type[Size]>
+      : public persistence_helper::list_serializable<Backend, Type[Size], persistence::serializable<Backend, Type[Size]>>
     {
       public:
         /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
@@ -351,7 +353,8 @@ namespace neam
     };
 
     template<typename Backend, typename Type>
-    class persistence::serializable<Backend, neam::array_wrapper<Type>> : public persistence_helper::list_serializable<Backend, neam::array_wrapper<Type>, persistence::serializable<Backend,neam::array_wrapper<Type>>>
+    class persistence::serializable<Backend, neam::array_wrapper<Type>>
+          : public persistence_helper::list_serializable<Backend, neam::array_wrapper<Type>, persistence::serializable<Backend, neam::array_wrapper<Type>>>
     {
       public:
         /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
@@ -385,7 +388,7 @@ namespace neam
           return persistence::serializable<Backend, Type>::from_memory(transaction, sub_memory, sub_size, &(ptr->array[index]), std::forward<Params>(p)...);
         }
 
-        static inline bool from_memory_end(cr::allocation_transaction &transaction, neam::array_wrapper<Type> *ptr)
+        static inline bool from_memory_end(cr::allocation_transaction &, neam::array_wrapper<Type> *)
         {
           return true;
         }
@@ -494,47 +497,39 @@ namespace neam
         template<typename... Params>
         static inline bool from_memory_single(cr::allocation_transaction &transaction, std::map<Key, Value, Compare, Alloc> *ptr, const char *sub_memory, size_t sub_size, size_t, Params &&...p)
         {
-          int8_t data[sizeof(std::pair<Key, Value>)] = {0};
+          int8_t data[sizeof(std::pair<Key, Value>)];
           std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(data);
-
           if (persistence::serializable<Backend, std::pair<Key, Value>>::from_memory(transaction, sub_memory, sub_size, dptr, std::forward<Params>(p)...))
           {
-            // The hint will always be true if the data is serialized with persistence.
+            // The hint will always be true if the data is serialized by persistence.
             // So we insert in amortized O(1)
-            ptr->emplace_hint(ptr->end(), std::move(dptr->first), std::move(dptr->second));
+            ptr->emplace_hint(ptr->end(), std::move(*dptr));
             return true;
           }
           return false;
         }
 
-        template<typename... Params>
-        static inline size_t from_memory_get_kv_pair_size(std::map<Key, Value, Compare, Alloc> *)
-        {
-          return sizeof(std::pair<Key, Value>);
-        }
+        using kv_instance_t = std::pair<Key, Value>;
 
         template<typename... Params>
-        static inline bool from_memory_single_key(cr::allocation_transaction &transaction, std::map<Key, Value, Compare, Alloc> *, void *pair, const char *k_memory, size_t k_size, Params &&...k_p)
+        static inline bool from_memory_single_key(cr::allocation_transaction &transaction, std::map<Key, Value, Compare, Alloc> *, kv_instance_t *pair, const char *k_memory, size_t k_size, Params &&...k_p)
         {
-          std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(pair);
-          if (persistence::serializable<Backend, Key>::from_memory(transaction, k_memory, k_size, &(dptr->first), std::forward<Params>(k_p)...))
+          if (persistence::serializable<Backend, Key>::from_memory(transaction, k_memory, k_size, &(pair->first), std::forward<Params>(k_p)...))
             return true;
           return false;
         }
 
         template<typename... Params>
-        static inline bool from_memory_single_value(cr::allocation_transaction &transaction, std::map<Key, Value, Compare, Alloc> *, void *pair, const char *v_memory, size_t v_size, Params &&...v_p)
+        static inline bool from_memory_single_value(cr::allocation_transaction &transaction, std::map<Key, Value, Compare, Alloc> *, kv_instance_t *pair, const char *v_memory, size_t v_size, Params &&...v_p)
         {
-          std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(pair);
-          if (persistence::serializable<Backend, Value>::from_memory(transaction, v_memory, v_size, &(dptr->second), std::forward<Params>(v_p)...))
+          if (persistence::serializable<Backend, Value>::from_memory(transaction, v_memory, v_size, &(pair->second), std::forward<Params>(v_p)...))
             return true;
           return false;
         }
 
-        static inline bool from_memory_single_push_kv(cr::allocation_transaction &, std::map<Key, Value, Compare, Alloc> *ptr, void *pair)
+        static inline bool from_memory_single_push_kv(cr::allocation_transaction &, std::map<Key, Value, Compare, Alloc> *ptr, kv_instance_t *pair)
         {
-          std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(pair);
-          ptr->emplace_hint(ptr->end(), std::move(dptr->first), std::move(dptr->second));
+          ptr->emplace_hint(ptr->end(), std::move(*pair));
           return true;
         }
 
@@ -619,7 +614,7 @@ namespace neam
         template<typename... Params>
         static inline bool from_memory_single(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr, const char *sub_memory, size_t sub_size, size_t, Params &&...p)
         {
-          int8_t data[sizeof(std::pair<Key, Value>)] = {0};
+          int8_t data[sizeof(std::pair<Key, Value>)];
           std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(data);
 
           if (persistence::serializable<Backend, std::pair<Key, Value>>::from_memory(transaction, sub_memory, sub_size, dptr, std::forward<Params>(p)...))
@@ -630,38 +625,31 @@ namespace neam
           return false;
         }
 
-        template<typename... Params>
-        static inline size_t from_memory_get_kv_pair_size(std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *)
-        {
-          return sizeof(std::pair<Key, Value>);
-        }
+        using kv_instance_t = std::pair<Key, Value>;
 
         template<typename... Params>
-        static inline bool from_memory_single_key(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr, void *pair, const char *k_memory, size_t k_size, Params &&...k_p)
+        static inline bool from_memory_single_key(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *, kv_instance_t *pair, const char *k_memory, size_t k_size, Params &&...k_p)
         {
-          std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(pair);
-          if (persistence::serializable<Backend, Key>::from_memory(transaction, k_memory, k_size, &(dptr->first), std::forward<Params>(k_p)...))
+          if (persistence::serializable<Backend, Key>::from_memory(transaction, k_memory, k_size, &(pair->first), std::forward<Params>(k_p)...))
             return true;
           return false;
         }
 
         template<typename... Params>
-        static inline bool from_memory_single_value(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr, void *pair, const char *v_memory, size_t v_size, Params &&...v_p)
+        static inline bool from_memory_single_value(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *, kv_instance_t *pair, const char *v_memory, size_t v_size, Params &&...v_p)
         {
-          std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(pair);
-          if (persistence::serializable<Backend, Key>::from_memory(transaction, v_memory, v_size, &(dptr->second), std::forward<Params>(v_p)...))
+          if (persistence::serializable<Backend, Key>::from_memory(transaction, v_memory, v_size, &(pair->second), std::forward<Params>(v_p)...))
             return true;
           return false;
         }
 
-        static inline bool from_memory_single_push_kv(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr, void *pair)
+        static inline bool from_memory_single_push_kv(cr::allocation_transaction &, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr, kv_instance_t *pair)
         {
-          std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(pair);
-          ptr->emplace_hint(ptr->end(), std::move(dptr->first), std::move(dptr->second));
+          ptr->emplace(std::move(*pair));
           return true;
         }
 
-        static inline bool from_memory_end(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr)
+        static inline bool from_memory_end(cr::allocation_transaction &, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *)
         {
           return true;
         }
