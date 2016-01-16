@@ -396,6 +396,9 @@ namespace neam
             ++memory; // skip the opening bracket
             --size;
 
+            int8_t temp_memory[sizeof(typename Caller::single_instance_t)];
+            typename Caller::single_instance_t *temp_memory_ptr = reinterpret_cast<typename Caller::single_instance_t *>(temp_memory);
+
             size_t index = 0;
             if (!std::isspace(memory[0]) || internal::json::advance_next(memory, size, index))
             {
@@ -417,7 +420,7 @@ namespace neam
                       return false;
 
                     // chain unserialize
-                    if (!Caller::from_memory_single(transaction, ptr, memory + index, end_index - index, element_index))
+                    if (!Caller::from_memory_single(transaction, ptr, temp_memory_ptr, memory + index, end_index - index, element_index))
                       return false;
 
                     index = end_index;

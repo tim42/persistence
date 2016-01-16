@@ -47,7 +47,7 @@ class my_class
       for (int i = 0; i < _i; ++i)
       {
         my_struct st;
-        for (int j = 0; j < 75; ++j)
+        for (int j = 0; j < _i; ++j)
           st.s_vector.push_back(j);
         s_map[i] = st;
       }
@@ -172,9 +172,9 @@ void run_test(size_t count, const std::string &name, PreFunction pre, Function f
 }
 
 using backend = neam::cr::persistence_backend::neam;
-constexpr float multiplier = 0.1;
+constexpr float multiplier = 0.5;
 // #define skip_big
-#define skip_small
+// #define skip_small
 
 int main()
 {
@@ -184,7 +184,7 @@ int main()
   my_class my_instance(75, 42.00000042, 4.2e-5, 23);
 #endif
 #ifndef skip_big
-  my_class my_big_instance(12000 * 150, 42.00000042, 4.2e-5, 23);
+  my_class my_big_instance(12000 /** 150*/, 42.00000042, 4.2e-5, 23);
 #endif
   std::cout << " ----------------\n" << std::endl;
 

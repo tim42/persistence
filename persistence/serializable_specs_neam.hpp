@@ -255,6 +255,9 @@ namespace neam
             if (!Caller::from_memory_allocate(transaction, element_count, ptr))
               return false;
 
+            int8_t temp_memory[sizeof(typename Caller::single_instance_t)];
+            typename Caller::single_instance_t *temp_memory_ptr = reinterpret_cast<typename Caller::single_instance_t *>(temp_memory);
+
             size_t offset = sizeof(uint32_t);
 
             for (size_t index = 0; index < element_count; ++index)
@@ -267,7 +270,7 @@ namespace neam
 
               if (offset + elem_size > size)
                 return false;
-              if (!Caller::from_memory_single(transaction, ptr, memory + offset, elem_size, index))
+              if (!Caller::from_memory_single(transaction, ptr, temp_memory_ptr, memory + offset, elem_size, index))
                 return false;
 
               offset += elem_size;
@@ -294,6 +297,7 @@ namespace neam
               if (!Caller::to_memory_single(mem, tmp_size, iterator, ptr))
                 return false;
               *size_memory = tmp_size;
+
               whole_object_size += tmp_size + sizeof(uint32_t);
               if (!Caller::to_memory_increment_iterator(iterator))
                 return false;
@@ -330,6 +334,7 @@ namespace neam
             );
             return res;
           }
+
           template<size_t Index>
           static inline bool ct_to_memory_single(NCR_ENABLE_IF((Mode & to_memory_compiletime) != 0, memory_allocator) &mem, size_t &size, const Type *ptr)
           {

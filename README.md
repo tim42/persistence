@@ -64,19 +64,27 @@ Current backends:
 
 ## performances
 
-Tests ran on an Intel i7, with g++ 4.8.3, in release mode with the binary backend
+Tests ran on an Intel i7, with g++ 5.2.1, in release mode with the binary backend
   - serialization:
-    - **1.16 Gb/s** (size of the serialized data: 1.15 Gb)
-    - **1.34 Gb/s** (size of the serialized data: 47.4 Ko)
+    - **1.44 Gb/s** (size of the serialized data: 1.15 Gb) _(0.94s per element)_
+    - **2.01 Gb/s** (size of the serialized data: 48.0 Ko) _(24μs  per element)_
   - deserialization:
-    - **1.62 Gb/s** (size of the serialized data: 1.15 Gb)
-    - **1.37 Gb/s** (size of the serialized data: 47.4 Ko)
-
-**NOTE**: due to some recent changes in the architecture, neam::persistence has lost some speed (at most 1Gb/s on the deserialization), but it should be easily improved in the future.
-Also, the JSON backend is not finished yet and is really **dumb** (it processes multiple time the same data, perform a lot of small operation instead of a big, faster one) 
-so there's a LOT of room for improvement here.
+    - **3.00 Gb/s** (size of the serialized data: 1.15 Gb) _(400ms per element)_
+    - **1.37 Gb/s** (size of the serialized data: 47.4 Ko) _(36μs  per element)_
 
 Numbers taken from the **benchmark** sample.
+
+Please note that the compiler, the compiler version, the optimization flags and the kind of data you may want to [de]serialize **WILL** change speeds.
+In the benchmark, we de/serialize a class whom one of the properties is a big std::map, with int as keys and as values a structure with some properties, one of which is a (big) std::vector of int
+Tests revealed that having a fixed std:vector length of 75 elements and a bigger std::map while conserving the overall 1.15 Gb size will reduce deserialization speed
+(reason yet unknown, but probably tied to memory allocation speed and the number of elements to operate on).
+
+To get the best performances out of `persistence` (if speed is an issue):
+ - consider using bigger elements but with fewer instances than a lot of small elements.
+ - do not disable explicit inlining (`-fno-inline` on gcc) and enable optimization (`-O2`/`-O3`).
+ - C arrays or arrays wrappers are faster that std::vectors (we can construct elements in-place)
+ - std::map is faster than std::unordered_map in the deserialization process (it changes a 3Gb/s to a 2.3Gb/s, adding ~100ms per elements).
+ - On overall, clang (3.7.0) produce slower code than gcc (5.2.1) except for deserialization of big objects (1.15Gb) where it is equivalent.
 
 ## pitfalls
 
@@ -167,7 +175,7 @@ and in the case of a post-deserialization, where members (possibly objects with 
 this would result in a massive memory leak and revert the object in a default state.
 
 **NOTE:** _[important note]_ : This function is mandatory if you have _complex_ (like `std::vector` or any other classes)
-types in your class and those members aren't part of the serialization process. You have to class the placement new operator on those members
+types in your class and those members **aren't part of the serialization process**. You have to class the placement new operator on those members
 (example for a std::vector: `new(&m_int_vector) std::vector<int>();`. This won't allocate memory, simply call the constructor of the object).
 
 ```C++
@@ -221,7 +229,6 @@ namespace neam
 ## future / TODO
 
 - Improve the JSON backend to avoid that dumb way of processing the size (pass a reference that is set by simple types (integers, strings, ...) and updated all along the hierarchy. It would be a **LOT** faster)
-- Improve the neam (binray) backend to retrieve the same performances as before
 - Add a SpiderMonkey backend
 
 ## author

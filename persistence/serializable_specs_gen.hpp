@@ -203,9 +203,10 @@ namespace neam
         }
     };
 
+    /// \note I now this is super weird, but this version is FASTER than the commented one under.
+    /// It is (maybe) 'cause it does one batch of insertions...
     template<typename Backend, typename Type, typename Alloc>
     class persistence::serializable<Backend, std::vector<Type, Alloc>>
-          : public persistence_helper::list_serializable<Backend, std::vector<Type, Alloc>, persistence::serializable<Backend, std::vector<Type, Alloc>>>
     {
       public:
         /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
@@ -215,74 +216,119 @@ namespace neam
           transaction.register_destructor_call_on_failure(ptr);
           return true;
         }
-
-        static inline bool from_memory_null(cr::allocation_transaction &transaction, std::vector<Type, Alloc> *ptr) // When the size is 0 or no data is given
+        /// \brief deserialize the object
+        /// \param[in] memory the serialized object
+        /// \param[in] size the size of the memory area
+        /// \param[out] ptr a pointer to the object (the one that the function will fill)
+        /// \return true if successful
+        template<typename... Params>
+        static inline bool from_memory(cr::allocation_transaction &, const char *memory, size_t size, std::vector<Type, Alloc> *ptr, Params &&... p)
         {
-          return default_initializer(transaction, ptr);
-        }
-
-        static inline bool from_memory_allocate(cr::allocation_transaction &transaction, size_t size, std::vector<Type, Alloc> *ptr)
-        {
-          if (default_initializer(transaction, ptr))
+          array_wrapper<Type> o(nullptr, 0);
+          cr::allocation_transaction temp_transaction;
+          if (serializable<Backend, neam::array_wrapper<Type>>::from_memory(temp_transaction, memory, size, &o, std::forward<Params>(p)...))
           {
-            ptr->reserve(size);
+            new(ptr) std::vector<Type, Alloc>();
+            ptr->reserve(o.size + 1);
+            ptr->insert(ptr->begin(), o.array, o.array + o.size);
             return true;
           }
           return false;
         }
 
+        /// \brief serialize the object
+        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] size the size of the memory area
+        /// \param[in] ptr a pointer to the object (the one that the function will serialize)
+        /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory_single(cr::allocation_transaction &transaction, std::vector<Type, Alloc> *ptr, const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
+        static inline bool to_memory(memory_allocator &mem, size_t &size, const std::vector<Type, Alloc> *ptr, Params &&... p)
         {
-          int8_t data[sizeof(Type)];
-          Type *dptr = reinterpret_cast<Type *>(data);
-
-          if (index != ptr->size())
-            return false;
-
-          if (persistence::serializable<Backend, Type>::from_memory(transaction, sub_memory, sub_size, dptr, std::forward<Params>(p)...))
-          {
-            ptr->emplace_back(std::move(*dptr));
-            return true;
-          }
-          return false;
-        }
-
-        static inline bool from_memory_end(cr::allocation_transaction &, std::vector<Type, Alloc> *)
-        {
-          return true;
-        }
-
-
-        static inline size_t to_memory_get_iterator(const std::vector<Type, Alloc> *)
-        {
-          return 0;
-        }
-
-        static inline size_t to_memory_get_element_count(const std::vector<Type, Alloc> *ptr)
-        {
-          return ptr->size();
-        }
-
-        static inline bool to_memory_increment_iterator(size_t &it)
-        {
-          ++it;
-          return true;
-        }
-
-        template<typename... Params>
-        static inline bool to_memory_single(memory_allocator &mem, size_t &size, size_t &it, const std::vector<Type, Alloc> *ptr, Params && ... p)
-        {
-          if (it >= ptr->size())
-            return false;
-          return persistence::serializable<Backend, Type>::to_memory(mem, size, &((*ptr)[it]), std::forward<Params>(p)...);
-        }
-
-        static inline bool to_memory_end_iterator(size_t &)
-        {
-          return true;
+          array_wrapper<Type> o(const_cast<Type *>(ptr->data()), ptr->size());
+          return serializable<Backend, neam::array_wrapper<Type>>::to_memory(mem, size, &o, std::forward<Params>(p)...);
         }
     };
+//     template<typename Backend, typename Type, typename Alloc>
+//     class persistence::serializable<Backend, std::vector<Type, Alloc>>
+//           : public persistence_helper::list_serializable<Backend, std::vector<Type, Alloc>, persistence::serializable<Backend, std::vector<Type, Alloc>>>
+//     {
+//       public:
+//         /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
+//         static inline bool default_initializer(cr::allocation_transaction &transaction, std::vector<Type, Alloc> *ptr)
+//         {
+//           new(ptr) std::vector<Type, Alloc>();
+//           transaction.register_destructor_call_on_failure(ptr);
+//           return true;
+//         }
+// 
+//         static inline bool from_memory_null(cr::allocation_transaction &transaction, std::vector<Type, Alloc> *ptr) // When the size is 0 or no data is given
+//         {
+//           return default_initializer(transaction, ptr);
+//         }
+// 
+//         static inline bool from_memory_allocate(cr::allocation_transaction &transaction, size_t size, std::vector<Type, Alloc> *ptr)
+//         {
+//           if (default_initializer(transaction, ptr))
+//           {
+//             ptr->resize(size);
+//             return true;
+//           }
+//           return false;
+//         }
+// 
+//         using single_instance_t = Type;
+// 
+//         template<typename... Params>
+//         static inline bool from_memory_single(cr::allocation_transaction &transaction, std::vector<Type, Alloc> *ptr, single_instance_t *data, const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
+//         {
+//           if (index >= ptr->size())
+//             return false;
+//           (*ptr)[index].~Type();
+// 
+//           if (persistence::serializable<Backend, Type>::from_memory(transaction, sub_memory, sub_size, &(*ptr)[index], std::forward<Params>(p)...))
+//           {
+// //             ptr->emplace_back(std::move(*data));
+// //             data->~Type();
+//             return true;
+//           }
+//           return false;
+//         }
+// 
+//         static inline bool from_memory_end(cr::allocation_transaction &, std::vector<Type, Alloc> *)
+//         {
+//           return true;
+//         }
+// 
+// 
+//         static inline size_t to_memory_get_iterator(const std::vector<Type, Alloc> *)
+//         {
+//           return 0;
+//         }
+// 
+//         static inline size_t to_memory_get_element_count(const std::vector<Type, Alloc> *ptr)
+//         {
+//           return ptr->size();
+//         }
+// 
+//         static inline bool to_memory_increment_iterator(size_t &it)
+//         {
+//           ++it;
+//           return true;
+//         }
+// 
+//         template<typename... Params>
+//         static inline bool to_memory_single(memory_allocator &mem, size_t &size, size_t &it, const std::vector<Type, Alloc> *ptr, Params && ... p)
+//         {
+//           if (it >= ptr->size())
+//             return false;
+//           return persistence::serializable<Backend, Type>::to_memory(mem, size, &((*ptr)[it]), std::forward<Params>(p)...);
+//         }
+// 
+//         static inline bool to_memory_end_iterator(size_t &)
+//         {
+//           return true;
+//         }
+//     };
 
     template<typename Backend, typename Type, size_t Size>
     class persistence::serializable<Backend, Type[Size]>
@@ -307,8 +353,10 @@ namespace neam
           return size == Size;
         }
 
+        using single_instance_t = int8_t;
+
         template<typename... Params>
-        static inline bool from_memory_single(cr::allocation_transaction &transaction, Type (*array)[Size], const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
+        static inline bool from_memory_single(cr::allocation_transaction &transaction, Type (*array)[Size], int8_t *, const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
         {
           if (index >= Size)
             return false;
@@ -380,8 +428,10 @@ namespace neam
           return true;
         }
 
+        using single_instance_t = int8_t;
+
         template<typename... Params>
-        static inline bool from_memory_single(cr::allocation_transaction &transaction, neam::array_wrapper<Type> *ptr, const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
+        static inline bool from_memory_single(cr::allocation_transaction &transaction, neam::array_wrapper<Type> *ptr, int8_t *, const char *sub_memory, size_t sub_size, size_t index, Params &&...p)
         {
           if (index >= ptr->size)
             return false;
@@ -494,16 +544,17 @@ namespace neam
           return default_initializer(transaction, ptr);
         }
 
+        using single_instance_t = std::pair<Key, Value>;
+
         template<typename... Params>
-        static inline bool from_memory_single(cr::allocation_transaction &transaction, std::map<Key, Value, Compare, Alloc> *ptr, const char *sub_memory, size_t sub_size, size_t, Params &&...p)
+        static inline bool from_memory_single(cr::allocation_transaction &transaction, std::map<Key, Value, Compare, Alloc> *ptr, single_instance_t *data, const char *sub_memory, size_t sub_size, size_t, Params &&...p)
         {
-          int8_t data[sizeof(std::pair<Key, Value>)];
-          std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(data);
-          if (persistence::serializable<Backend, std::pair<Key, Value>>::from_memory(transaction, sub_memory, sub_size, dptr, std::forward<Params>(p)...))
+          if (persistence::serializable<Backend, std::pair<Key, Value>>::from_memory(transaction, sub_memory, sub_size, data, std::forward<Params>(p)...))
           {
             // The hint will always be true if the data is serialized by persistence.
             // So we insert in amortized O(1)
-            ptr->emplace_hint(ptr->end(), std::move(*dptr));
+            ptr->emplace_hint(ptr->end(), std::move(*data));
+            data->~single_instance_t();
             return true;
           }
           return false;
@@ -611,21 +662,21 @@ namespace neam
           return default_initializer(transaction, ptr);
         }
 
-        template<typename... Params>
-        static inline bool from_memory_single(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr, const char *sub_memory, size_t sub_size, size_t, Params &&...p)
-        {
-          int8_t data[sizeof(std::pair<Key, Value>)];
-          std::pair<Key, Value> *dptr = reinterpret_cast<std::pair<Key, Value> *>(data);
+        using single_instance_t = std::pair<const Key, Value>;
 
-          if (persistence::serializable<Backend, std::pair<Key, Value>>::from_memory(transaction, sub_memory, sub_size, dptr, std::forward<Params>(p)...))
+        template<typename... Params>
+        static inline bool from_memory_single(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *ptr, single_instance_t *data, const char *sub_memory, size_t sub_size, size_t, Params &&...p)
+        {
+          if (persistence::serializable<Backend, std::pair<const Key, Value>>::from_memory(transaction, sub_memory, sub_size, data, std::forward<Params>(p)...))
           {
-            ptr->emplace(std::move(dptr->first), std::move(dptr->second));
+            ptr->emplace(std::move(*data));
+            data->~single_instance_t();
             return true;
           }
           return false;
         }
 
-        using kv_instance_t = std::pair<Key, Value>;
+        using kv_instance_t = std::pair<const Key, Value>;
 
         template<typename... Params>
         static inline bool from_memory_single_key(cr::allocation_transaction &transaction, std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> *, kv_instance_t *pair, const char *k_memory, size_t k_size, Params &&...k_p)

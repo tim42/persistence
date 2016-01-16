@@ -246,9 +246,11 @@ namespace neam
               return true;
             }
 
+            using single_instance_t = uint8_t;
+
             // Here we do something else: we just retrieve the property and uses its index to retrieve its position
             template<typename... Params>
-            static inline bool from_memory_single(cr::allocation_transaction &transaction, Type *ptr, const char *sub_memory, size_t sub_size, size_t index, Params && ...p)
+            static inline bool from_memory_single(cr::allocation_transaction &transaction, Type *ptr, uint8_t *, const char *sub_memory, size_t sub_size, size_t index, Params && ...p)
             {
               bool res = true;
               size_t i = 0;
@@ -296,7 +298,7 @@ namespace neam
             {
               int *index = reinterpret_cast<int *>(pair);
               if (*index != -1)
-                return from_memory_single(transaction, ptr, v_memory, v_size, *index, std::forward<Params>(v_p)...);
+                return from_memory_single(transaction, ptr, nullptr, v_memory, v_size, *index, std::forward<Params>(v_p)...);
               return true;
             }
 
