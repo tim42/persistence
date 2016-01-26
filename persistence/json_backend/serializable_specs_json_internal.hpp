@@ -35,8 +35,8 @@
 #include <cmath>
 
 #include <tools/array_wrapper.hpp>
-#include "object.hpp" // for my IDE
-#include "raw_data.hpp"
+#include "../object.hpp" // for my IDE
+#include "../raw_data.hpp"
 
 #include "json_string_utilities.hpp"
 

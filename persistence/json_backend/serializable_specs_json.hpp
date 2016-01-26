@@ -30,8 +30,8 @@
 #include <string>
 #include <tools/array_wrapper.hpp>
 #include <tools/demangle.hpp>
-#include "object.hpp" // for my IDE
-#include "raw_data.hpp"
+#include "../object.hpp" // for my IDE
+#include "../raw_data.hpp"
 
 #include "serializable_specs_json_internal.hpp"
 
