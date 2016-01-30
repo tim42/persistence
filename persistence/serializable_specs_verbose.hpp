@@ -79,7 +79,7 @@ namespace neam
 
     /// \brief Pointer serializer
     template<typename Type>
-    class persistence::serializable<persistence_backend::verbose, Type *>
+    class persistence::serializable<persistence_backend::verbose, Type *, typename std::enable_if<!std::is_same<Type, char>::value && !std::is_same<Type, const char>::value, void>::type>
     {
       public:
         /// \brief serialize the object

@@ -79,7 +79,9 @@ namespace neam
           size_t size = 0;
 
           if (!serializable<Backend, Type>::to_memory(mem, size, &obj, std::forward<Params>(p)...) || mem.has_failed())
+          {
             return rdt;
+          }
 
           *reinterpret_cast<char *>(mem.allocate(1)) = 0;
           size = mem.size();
@@ -135,7 +137,7 @@ namespace neam
         /// \see constructable_serializable_object
         /// \note this version if for dumping the memory of the object directly
         /// \note this is a recursive solution: \b avoid \b \e reference \b cycles in your constructs !!! (else: \e stack-overflow).
-        template<typename Backend, typename Type, typename... Args>
+        template<typename Backend, typename Type, typename Fuck = void, typename... Args>
         class serializable
         {
           public:
@@ -258,7 +260,7 @@ namespace neam
               // Sorry.
               NEAM_EXECUTE_PACK(
                 res &= ((res && i++ == index) ?
-                  persistence::serializable<Backend, typename OffsetTypeList::type>::from_memory(transaction, sub_memory, sub_size, reinterpret_cast<typename OffsetTypeList::type *>(reinterpret_cast<uint8_t *>(ptr) + OffsetTypeList::offset), std::forward<Params>(p)...)
+                  persistence::serializable<Backend, typename OffsetTypeList::type>::from_memory(transaction, sub_memory, sub_size, (typename OffsetTypeList::type *)(reinterpret_cast<uint8_t *>(ptr) + OffsetTypeList::offset), std::forward<Params>(p)...)
                 : true)
               );
 

@@ -41,7 +41,7 @@ namespace neam
   {
     /// \brief Pointer serializer
     template<typename Type>
-    class persistence::serializable<persistence_backend::json, Type *>
+    class persistence::serializable<persistence_backend::json, Type *, typename std::enable_if<!std::is_same<Type, char>::value && !std::is_same<Type, const char>::value, void>::type>
     {
       public:
         /// \brief deserialize the object
@@ -241,7 +241,7 @@ namespace neam
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
         /// \note the stored string doesn't have the null byte stored (as we store its size instead)
-        static bool to_memory(memory_allocator &mem, size_t &size, const char *const*ptr, size_t = 0)
+        static bool to_memory(memory_allocator &mem, size_t &size, const char *const*const ptr, size_t = 0)
         {
           if (!*ptr)
             return internal::json::_allocate_format_string(mem, size, 0, nullptr, "null");
