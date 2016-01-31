@@ -210,6 +210,12 @@ namespace neam
         /// \return true if successful
         static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, char **ptr)
         {
+          if (!size)
+          {
+            *ptr = nullptr;
+            return true;
+          }
+
           *ptr = reinterpret_cast<char *>(transaction.allocate_raw(size + 1));
           if (*ptr)
           {
@@ -227,6 +233,12 @@ namespace neam
         /// \note the stored string doesn't have the null byte stored (as we store its size instead)
         static inline bool to_memory(memory_allocator &mem, size_t &size, const char *const*ptr)
         {
+          if (!*ptr)
+          {
+            size = 0;
+            return true;
+          }
+
           size = strlen(*ptr);
           char *memory = reinterpret_cast<char *>(mem.allocate(size));
           if (memory)
