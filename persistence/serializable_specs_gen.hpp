@@ -615,7 +615,11 @@ namespace neam
           cr::allocation_transaction temp_transaction;
           if (serializable<Backend, char *>::from_memory(temp_transaction, memory, size, &str, std::forward<Params>(p)...))
           {
-            new(ptr) std::basic_string<CharT, Traits, Alloc>(str);
+            if (str)
+              new(ptr) std::basic_string<CharT, Traits, Alloc>(str);
+            else
+              new(ptr) std::basic_string<CharT, Traits, Alloc>();
+
             temp_transaction.rollback();
             transaction.register_destructor_call_on_failure(ptr);
             return true;
