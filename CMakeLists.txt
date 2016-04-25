@@ -48,6 +48,11 @@ set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/")
 set(EXECUTABLE_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/")
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/libs")
 
+# export the installation prefix
+if (${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
+  set(NEAM_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
+endif()
+
 # deps check
 include(cmake/deps.cmake)
 
@@ -77,7 +82,6 @@ if (${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
   add_subdirectory(samples/storage)
   add_subdirectory(samples/verbose)
   add_subdirectory(samples/json)
-
 endif()
 
 # copy

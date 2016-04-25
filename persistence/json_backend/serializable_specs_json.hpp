@@ -28,8 +28,8 @@
 
 #include <type_traits>
 #include <string>
-#include <tools/array_wrapper.hpp>
-#include <tools/demangle.hpp>
+#include "../tools/array_wrapper.hpp"
+#include "../tools/demangle.hpp"
 #include "../object.hpp" // for my IDE
 #include "../raw_data.hpp"
 

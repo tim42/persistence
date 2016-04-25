@@ -27,9 +27,9 @@
 # define __N_331927306113683385_1782336113__SERIALIZABLE_SPECS_HPP__
 
 #include <type_traits>
-#include <tools/enable_if.hpp>
-#include <tools/array_wrapper.hpp>
-#include <tools/endianness.hpp>
+#include "tools/enable_if.hpp"
+#include "tools/array_wrapper.hpp"
+#include "tools/endianness.hpp"
 #include "object.hpp" // for my IDE
 #include "raw_data.hpp"
 
