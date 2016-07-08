@@ -77,7 +77,7 @@ namespace neam
       NCRP_TYPED_OFFSET(my_class, s_float)
     > {};
 
-    template<typename Backend> class persistence::serializable<Backend, my_struct> : public persistence::constructible_serializable_object
+    template<typename Backend> class persistence::serializable<Backend, my_struct> : public persistence::serializable_object
     <
       Backend, // < the backend (here: all backends)
 
