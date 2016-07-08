@@ -272,7 +272,7 @@ namespace neam
             ptr->insert(ptr->begin(), o.array, o.array + o.size);
             for (size_t i = 0; i < o.size; ++i)
               o.array[i].~Type();
-            temp_transaction.complete();
+            temp_transaction.rollback(); // free up the temporary memory
             return true;
           }
           return false;
