@@ -90,8 +90,10 @@ namespace neam
         _clean();
         size = (o.size);
         data = (o.data);
+        ownership = o.ownership;
         o.size = 0;
         o.data = nullptr;
+        o.ownership = false;
         return *this;
       }
 

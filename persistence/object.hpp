@@ -401,8 +401,12 @@ namespace neam
             template<typename... Params>
             static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params &&... p)
             {
-              if (!serializable_object<Backend, Type, OffsetTypeList...>::from_memory(transaction, memory, size, ptr, std::forward<Params>(p)...))
+              allocation_transaction temp_transaction;
+              if (!serializable_object<Backend, Type, OffsetTypeList...>::from_memory(temp_transaction, memory, size, ptr, std::forward<Params>(p)...))
+              {
+                temp_transaction.rollback();
                 return false;
+              }
 
               try
               {
@@ -411,8 +415,12 @@ namespace neam
               }
               catch (...)
               {
+                temp_transaction.rollback();
                 return false;
               }
+
+              temp_transaction.complete();
+              transaction.register_destructor_call_on_failure(ptr);
 
               return true;
             }

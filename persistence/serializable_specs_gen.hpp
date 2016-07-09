@@ -261,17 +261,18 @@ namespace neam
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static inline bool from_memory(cr::allocation_transaction &, const char *memory, size_t size, std::vector<Type, Alloc> *ptr, Params &&... p)
+        static inline bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, std::vector<Type, Alloc> *ptr, Params &&... p)
         {
           array_wrapper<Type> o(nullptr, 0);
           cr::allocation_transaction temp_transaction;
           if (serializable<Backend, neam::array_wrapper<Type>>::from_memory(temp_transaction, memory, size, &o, std::forward<Params>(p)...))
           {
             new(ptr) std::vector<Type, Alloc>();
+            transaction.register_destructor_call_on_failure(ptr);
             ptr->reserve(o.size + 1);
             ptr->insert(ptr->begin(), o.array, o.array + o.size);
-            for (size_t i = 0; i < o.size; ++i)
-              o.array[i].~Type();
+//             for (size_t i = 0; i < o.size; ++i)
+//               o.array[i].~Type();
             temp_transaction.rollback(); // free up the temporary memory
             return true;
           }
@@ -402,12 +403,14 @@ namespace neam
         template<typename... Params>
         static inline bool from_memory_single(cr::allocation_transaction &transaction, std::deque<Type, Alloc> *ptr, single_instance_t *data, const char *sub_memory, size_t sub_size, size_t, Params &&...p)
         {
-          if (persistence::serializable<Backend, Type>::from_memory(transaction, sub_memory, sub_size, data, std::forward<Params>(p)...))
+          cr::allocation_transaction temp_transaction;
+          if (persistence::serializable<Backend, Type>::from_memory(temp_transaction, sub_memory, sub_size, data, std::forward<Params>(p)...))
           {
             ptr->emplace_back(std::move(*data));
-            data->~Type();
+            temp_transaction.rollback();
             return true;
           }
+          temp_transaction.rollback();
           return false;
         }
 

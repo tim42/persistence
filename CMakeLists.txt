@@ -77,11 +77,11 @@ endif()
 
 # build the samples
 if (${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
+  add_subdirectory(samples/basic)
   add_subdirectory(samples/simple)
+  add_subdirectory(samples/advanced)
   add_subdirectory(samples/benchmark)
   add_subdirectory(samples/storage)
-  add_subdirectory(samples/verbose)
-  add_subdirectory(samples/json)
 endif()
 
 # copy
