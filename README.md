@@ -110,7 +110,12 @@ Endianness (floating points + integers) and size differences (integers) are hand
 
 # Examples
 
-**NOTE**: you're advised to take a look at the samples in the `samples` folder.
+**NOTE**: you're advised to take a look at the samples in the `samples` folder:
+
+[the basic sample](samples/basic/main.cpp)
+[the simple sample](samples/simple/main.cpp)
+[the advanced sample](samples/advanced/main.cpp)
+
 
 ## serialize
 
