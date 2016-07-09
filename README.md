@@ -37,6 +37,7 @@ neam/persistence provides some "built-in" serializers for:
   - std::map
   - std::unordered_map
   - std::vector
+  - std::deque
   - std::basic_string (so `std::string` too, but not only)
   - C arrays (`int m_int_array[500];`, including multi-dimensional arrays)
   - pointers (using dynamic allocation), and null pointers
@@ -44,8 +45,18 @@ neam/persistence provides some "built-in" serializers for:
   - neam::array_wrapper
   - neam::persistence::raw_data (almost like a `cr::array_wrapper`)
 
-For objects requesting it, a post-serialization function could be called after the serialization of the object has been done (and has been successful).
-As the constructor won't be called, this is particularly useful. (the constructor won't be called because the compiler will default initialize all the fields, possibly overwriting deserialized values)
+Using the neam binary backend, you can serialize on a machine an deserialize on another if and only if:
+- floating points have the same size/format (32bit for floats, 64 for doubles), and share the same endianness as integers
+- you used exactly the same serialization metadata on the two machines / programs
+
+Endianness (floating points + integers) and size differences (integers) are handled transparently.
+
+For objects requesting it, a post-deserialization function could be called after the deserialization of the object has been done (and has been successful).
+As the constructor won't be called, this is particularly useful. (the constructor won't be called because the compiler will default initialize all the fields, possibly overwriting deserialized values).
+
+You can deserialize over an existing object / memory location or ask persistence to allocate something for you.
+
+You can use the memory allocation transaction system to free the result of a deserialization if your deserialized object does not have a destructor.
 
 neam/persistence also includes some _wrappers_: _(a code that wrap the generated data and perform some actions)_
   - checksum (a custom, handcrafted, non-secure but quite fast hashing function)
@@ -76,13 +87,13 @@ Numbers taken from the **benchmark** sample.
 
 Please note that the compiler, the compiler version, the optimization flags and the kind of data you may want to [de]serialize **WILL** change speeds.
 In the benchmark, we de/serialize a class whom one of the properties is a big std::map, with int as keys and as values a structure with some properties, one of which is a (big) std::vector of int
-Tests revealed that having a fixed std:vector length of 75 elements and a bigger std::map while conserving the overall 1.15 Gb size will reduce deserialization speed
+Tests revealed that having a fixed std::vector length of 75 elements and a bigger std::map while conserving the overall 1.15 Gb size will reduce deserialization speed
 (reason yet unknown, but probably tied to memory allocation speed and the number of elements to operate on).
 
 To get the best performances out of `persistence` (if speed is an issue):
  - consider using bigger elements but with fewer instances than a lot of small elements.
  - do not disable explicit inlining (`-fno-inline` on gcc) and enable optimization (`-O2`/`-O3`).
- - C arrays or arrays wrappers are faster that std::vectors (we can construct elements in-place)
+ - C arrays or arrays wrappers are faster than std::vectors (we can construct elements in-place)
  - std::map is faster than std::unordered_map in the deserialization process (it changes a 3Gb/s to a 2.3Gb/s, adding ~100ms per elements).
  - On overall, clang (3.7.0) produce slower code than gcc (5.2.1) except for deserialization of big objects (1.15Gb) where it is equivalent.
 
@@ -112,9 +123,9 @@ Endianness (floating points + integers) and size differences (integers) are hand
 
 **NOTE**: you're advised to take a look at the samples in the `samples` folder:
 
-[the basic sample](samples/basic/main.cpp)
-[the simple sample](samples/simple/main.cpp)
-[the advanced sample](samples/advanced/main.cpp)
+- [the basic sample](samples/basic/main.cpp) (how persistence works, how to serialize & deserialize things)
+- [the simple sample](samples/simple/main.cpp) (some more specific things about persistence)
+- [the advanced sample](samples/advanced/main.cpp) (some advanced topics about some advanced usage of persistence)
 
 
 ## serialize
@@ -234,6 +245,7 @@ namespace neam
 ## future / TODO
 
 - Improve the JSON backend to avoid that dumb way of processing the size (pass a reference that is set by simple types (integers, strings, ...) and updated all along the hierarchy. It would be a **LOT** faster)
+- Add more STL containers, in a more convenient way (separate headers for each ones)
 - Add a SpiderMonkey backend
 
 ## author
