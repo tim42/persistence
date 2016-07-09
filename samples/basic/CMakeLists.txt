@@ -5,7 +5,7 @@
 cmake_minimum_required(VERSION 2.8)
 
 # set the name of the sample
-set(SAMPLE_NAME "s-advanced_${PROJ_APP}")
+set(SAMPLE_NAME "s-basic_${PROJ_APP}")
 
 # avoid listing all the files
 file(GLOB_RECURSE srcs ./*.cpp ./*.hpp)

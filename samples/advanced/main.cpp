@@ -1,76 +1,49 @@
 
-#include <unistd.h>
-#include <cstddef>
-#include <cmath>
-#include <cstdlib>
 #include <map>
 #include <iostream>
 
 #include <persistence/persistence.hpp>
 
-// constexpr const char *_to_tpl_str(const char *str) { return str; }
-// template<const char *T> struct str_tst {};
-// using ebd_str = str_tst<(const char *)_to_tpl_str("coucou")>;
+//
+// NOTE: You should look to the basic and simple samples before !!
+//
+// You may not need what that sample will show you, but you never know !!
+// It's here, just in case.
+// I've made big projects that uses persistence without using any of this,
+// but I recon that in some cases it could be helpful.
+//
 
-/// \brief create a random string
-static inline std::string random_string(size_t min_len = 5)
-{
-  const size_t rand_len = min_len + rand() % 15;
+int print_counter = 0;
 
-  std::string ret;
-  ret.reserve(rand_len);
-  for (size_t i = 0; i < rand_len; ++i)
-    ret += static_cast<char>(rand() % 93 + 32);
-  return ret;
-}
-
-/// \brief a class we want to be serialized / deserialized
 struct my_struct
 {
   int s_int;
-  std::string s_string;
   std::vector<int> s_vector;
 };
 
-/// \brief another class we want to be serialized / deserialized
 class my_class
 {
   public:
-    /// \brief mandatory constructor
-    my_class(int _i, double _s_double, float _s_float, int _s_int) : s_int(_s_int), s_double(_s_double), s_float(_s_float), i(_i)
-    {
-      for (size_t i = 0; i < 5; ++i)
-      {
-        my_struct st;
-        st.s_int = 5 - i;
-        for (size_t j = 0; j < 5; ++j)
-          st.s_vector.push_back(j);
-        st.s_string = "this is a lovelely string ! [" + std::to_string(i) + "]";
-        s_map[random_string()] = st;
-      }
-      s_data = new neam::cr::raw_data(sizeof(my_class), reinterpret_cast<int8_t *>(this));
-    }
-
-    ~my_class()
-    {
-      delete s_data;
-    }
-
-  private: // serialized properties
-    int s_int;
     double s_double;
-    float s_float;
-    bool s_bool = true;
+    std::vector<my_struct> s_vector;
 
-    neam::cr::raw_data *s_data;
-    float my_array[3][2] = {{13.f, 55.550054f}, {-.00013f, 15.f}, {1e6f, 1.550e-10f}};
+    std::vector<double> s_dbl_vector; // only "serialized" with the verbose backend
 
-    std::map<std::string, my_struct> s_map;
+  private:
+    // The post-deserialization function that will be called after deserializing the object
+    // This sample (also) shows how to pass instances as parameters
+    void post_deserialization(const my_struct &ms)
+    {
+      new (&s_dbl_vector) std::vector<double>();
 
-    int *my_nullptr = nullptr;
-
-  private: // non-serialized properties
-    int i;
+      // print the received structure:
+      if (print_counter == 0)
+      {
+        ++print_counter;
+        neam::cr::raw_data rd = neam::cr::persistence::serialize<neam::cr::persistence_backend::verbose>(ms);
+        std::cout << "my_struct ms:\n" << rd.data << std::endl;
+      }
+    }
 
     friend neam::cr::persistence;
 };
@@ -80,64 +53,94 @@ namespace neam
 {
   namespace cr
   {
-    NCRP_DECLARE_NAME(my_class, s_int);
-    NCRP_DECLARE_NAME(my_class, s_double);
-    NCRP_DECLARE_NAME(my_class, s_float);
-    NCRP_DECLARE_NAME(my_class, s_bool);
-    NCRP_DECLARE_NAME(my_class, s_data);
-    NCRP_DECLARE_NAME(my_class, my_nullptr);
-    NCRP_DECLARE_NAME(my_class, my_array);
-    NCRP_DECLARE_NAME(my_class, s_map);
-    template<typename Backend> class persistence::serializable<Backend, my_class> : public persistence::serializable_object
-    <
-      Backend, // < the backend (here: all backends)
-
-      my_class, // < the class type to handle
-
-      // simply list here the members you want to serialize / deserialize
-      NCRP_NAMED_TYPED_OFFSET(my_class, s_int, names::my_class::s_int),
-      NCRP_NAMED_TYPED_OFFSET(my_class, s_double, names::my_class::s_double),
-      NCRP_NAMED_TYPED_OFFSET(my_class, s_float, names::my_class::s_float),
-      NCRP_NAMED_TYPED_OFFSET(my_class, s_bool, names::my_class::s_bool),
-      NCRP_NAMED_TYPED_OFFSET(my_class, s_data, names::my_class::s_data),
-      NCRP_NAMED_TYPED_OFFSET(my_class, my_nullptr, names::my_class::my_nullptr), // won't appear in the serialization output ;)
-      NCRP_NAMED_TYPED_OFFSET(my_class, my_array, names::my_class::my_array),
-      NCRP_NAMED_TYPED_OFFSET(my_class, s_map, names::my_class::s_map)
-    > {};
-
-    NCRP_DECLARE_NAME(my_struct, s_int);
-    NCRP_DECLARE_NAME(my_struct, s_string);
-    NCRP_DECLARE_NAME(my_struct, s_vector);
-    template<typename Backend> class persistence::serializable<Backend, my_struct> : public persistence::serializable_object
+    template<typename Backend>
+    class persistence::serializable<Backend, my_struct> : public persistence::serializable_object
     <
       Backend, // < the backend (here: all backends)
 
       my_struct, // < the class type to handle
 
-      // simply list here the members you want to serialize / deserialize
-      NCRP_NAMED_TYPED_OFFSET(my_struct, s_int, names::my_struct::s_int),
-      NCRP_NAMED_TYPED_OFFSET(my_struct, s_string, names::my_struct::s_string),
-      NCRP_NAMED_TYPED_OFFSET(my_struct, s_vector, names::my_struct::s_vector)
+      NCRP_TYPED_OFFSET(my_struct, s_int),
+      NCRP_TYPED_OFFSET(my_struct, s_vector)
+    > {};
+
+    // the generic metadata, used across some backends (even those that doesn not exist yet)
+    template<typename Backend>
+    class persistence::serializable<Backend, my_class> : public persistence::constructible_serializable_object
+    <
+      Backend, // < the backend (here: all backends)
+
+      my_class, // < the class type to handle
+
+      // If your object doesn't have any parameter to its constructor: use N_CR_EMBED_OBJECT_0(my_class)
+      N_CALL_POST_FUNCTION(my_class, N_CR_EMBED_OBJECT(my_struct, N_EMBED(42), N_CR_EMBED_OBJECT(std::vector<int>, N_EMBED(-42), N_EMBED(111)))),
+
+
+      NCRP_TYPED_OFFSET(my_class, s_double),
+      NCRP_TYPED_OFFSET(my_class, s_vector)
+    > {};
+
+    // Here we create a special metadata for the verbose backend that will serialize
+    // some data that isn't serialized in the generic metadata. (useful to print some info about the class
+    // without cluttering your serialized data)
+    template<>
+    class persistence::serializable<persistence_backend::verbose, my_class> : public persistence::serializable_object
+    <
+      persistence_backend::verbose, // < the backend (here: JUST the verbose backend)
+
+      my_class, // < the class type to handle
+
+      NCRP_TYPED_OFFSET(my_class, s_double),
+      NCRP_TYPED_OFFSET(my_class, s_vector),
+      NCRP_TYPED_OFFSET(my_class, s_dbl_vector)
     > {};
   } // namespace cr
 } // namespace neam
 
-
 int main()
 {
-  my_class my_instance(13, 42.00000042, 4.2e-5, 23);
+  my_class my_instance;
 
-  // serialize (a start indentation could also be provided as second parameter)
-  neam::cr::raw_data serialized_data = neam::cr::persistence::serialize<neam::cr::persistence_backend::verbose>(my_instance);
-  if (!serialized_data.data)
+  my_instance.s_dbl_vector.resize(5, 0.1);
+  my_instance.s_double = -18.2;
+  my_instance.s_vector.resize(2, my_struct {30, {1, -2, 3}});
+
+  neam::cr::raw_data rd = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam>(my_instance);
   {
-    std::cerr << "Unable to serialize... :(" << std::endl;
-    return 1;
+
+    // Will print the struct that are passed as argument to the post_deserialization callback
+    my_class *my_ptr;
+    if ((my_ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam, my_class>(rd)))
+      delete my_ptr;
   }
 
-  std::cout << "the size of the serialized data is: " << serialized_data.size << " bytes" << std::endl;
+  // And what if I want the control over the deserialized object and its memory ?
+  {
+    // The allocation_transaction object will hold every allocation made by the deserializer,
+    // that way if an error occurs, it can rollback and free all the memory it has allocated.
+    // That can be very useful if the deserializer fails while an object is half deserialized !
+    neam::cr::allocation_transaction transaction;
+    my_class *ptr = reinterpret_cast<my_class *>(transaction.allocate_raw(sizeof(my_class)));
 
-  std::cout << "serialized data:\n" << serialized_data.data << "\n" << std::endl;
+    size_t size = rd.size; // here because of the JSON serializer: it needs a non-const reference !.
+    bool result = neam::cr::persistence::serializable<neam::cr::persistence_backend::neam, my_class>::from_memory(transaction, reinterpret_cast<const char *>(rd.data), size, ptr);
+    if (!result)
+    {
+      transaction.rollback();
+      std::cout << "deserialization failed !" << std::endl;
+      return 0;
+    }
 
-  return 0;
+    // we have the object in ptr:
+    std::cout << "ptr->s_double: " << ptr->s_double << std::endl;
+
+    // A rollback here will free the object and all the memory allocated
+    transaction.rollback();
+
+
+    // This scheme can be very useful if you have simple structures (with no constructors / destructors)
+    // that hold a lot of dynamically allocated objects (like a tree or vector of pointers, ...).
+    // You can free everything at once, without having to walk the tree, ...
+    // Moreover this also works with partially constructed objects whereas destructors will most likely fail in that case.
+  }
 }
