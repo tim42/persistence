@@ -14,13 +14,13 @@ $ mkdir build && cd build && cmake ..
 $ make
 ```
 
-The library is in `libs/`, the samples are in the current folder.
+The library is in `libs/`, the samples are in the build folder.
 
 ## why it's different
 
 neam/persistence is a non-intrusive, external serialization utility.
 The traditional C++ approach is to inherit a given class from a serializer interface that provide at least two function `serialize` and `deserialize`, and its the duty of the class to serialize itself.
-Their is also the dumb solution to dump the memory of the object directly (but this is not portable, even between version of the same compiler).
+There is also the dumb solution to dump the memory of the object directly (but this is not portable, even between version of the same compiler).
 
 Both solutions difficultly handle pointers (and the latter doesn't even handle it), dynamic allocation, complex data types (like an object hierarchy, with arrays, dictionaries, ...).
 
@@ -34,16 +34,14 @@ neam/persistence provides multiple backends: with the same metadata, you can ser
 ## features
 
 neam/persistence provides some "built-in" serializers for:
-  - std::map
-  - std::unordered_map
-  - std::vector
-  - std::deque
+  - std::vector, std::array, std::list, std::deque, std::forward_list, working with any allocator
+  - std::map, std::unordered_map, std::set, std::unordered_set, working with any allocator, key comparison & hash function
   - std::basic_string (so `std::string` too, but not only)
   - C arrays (`int m_int_array[500];`, including multi-dimensional arrays)
   - pointers (using dynamic allocation), and null pointers
   - a generic object serializer (can serialize objects properties by properties)
   - neam::array_wrapper
-  - neam::persistence::raw_data (almost like a `cr::array_wrapper`)
+  - neam::persistence::raw_data (almost like a `cr::array_wrapper`), so you can serialize already serialized data
 
 Using the neam binary backend, you can serialize on a machine an deserialize on another if and only if:
 - floating points have the same size/format (32bit for floats, 64 for doubles), and share the same endianness as integers
@@ -132,13 +130,13 @@ Endianness (floating points + integers) and size differences (integers) are hand
 
 ```c++
 neam::cr::persistence::raw_data serialized;
-serialized = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam /*JSON, verbose */>(&my_object);
+serialized = neam::cr::persistence::serialize<neam::cr::persistence_backend::neam /*json, verbose */>(&my_object);
 ```
 
 ## deserialize
 
 ```c++
-my_class *ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam /*JSON, verbose */, my_class>(my_serialized_raw_data);
+my_class *ptr = neam::cr::persistence::deserialize<neam::cr::persistence_backend::neam /*json, verbose */, my_class>(my_serialized_raw_data);
 
 // ...
 
@@ -149,7 +147,7 @@ delete ptr;
 
 **NOTE:** If you want to serialize private members of a class, you have to add this statement `friend neam::cr::persistence;` in the class to serialize
 
-_you should take a look at the `simple` or the `storage` samples ;)_
+_you should take a look at the [basic](samples/basic/main.cpp) and the [simple](samples/simple/main.cpp) samples ;)_
 
 
 ```C++
@@ -213,7 +211,7 @@ struct my_struct
      non_serialized = new int[size];
   }
 
-  // and the destructor. (DO NOT FORGET IT IF YOU DO DYNAMIC ALLOCATION !!!)
+  // and the destructor. (because of dynamic allocation !!!)
   ~my_struct() {delete [] non_serialized;}
 };
 
@@ -236,7 +234,7 @@ namespace neam
         NCRP_TYPED_OFFSET(my_struct, my_float),
         NCRP_TYPED_OFFSET(my_struct, my_map_of_vector)
       > {};
-  } // namespace r
+  } // namespace cr
 } // namespace neam
 
 
@@ -245,7 +243,6 @@ namespace neam
 ## future / TODO
 
 - Improve the JSON backend to avoid that dumb way of processing the size (pass a reference that is set by simple types (integers, strings, ...) and updated all along the hierarchy. It would be a **LOT** faster)
-- Add more STL containers, in a more convenient way (separate headers for each ones)
 - Add a SpiderMonkey backend
 
 ## author
