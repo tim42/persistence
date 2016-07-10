@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 2.8)
 
 set(PROJ_VERSION_MAJOR 0)
 set(PROJ_VERSION_MINOR 0)
-set(PROJ_VERSION_SUPERMINOR 1)
+set(PROJ_VERSION_SUPERMINOR 2)
 
 add_definitions(-D_PROJ_VERSION_MAJOR=${PROJ_VERSION_MAJOR})
 add_definitions(-D_PROJ_VERSION_MINOR=${PROJ_VERSION_MINOR})
@@ -82,6 +82,7 @@ if (${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
   add_subdirectory(samples/advanced)
   add_subdirectory(samples/benchmark)
   add_subdirectory(samples/storage)
+  add_subdirectory(samples/unit-test)
 endif()
 
 # copy
