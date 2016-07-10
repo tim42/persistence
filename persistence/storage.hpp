@@ -27,6 +27,7 @@
 # define __N_14097779492124764538_1369986451__STORAGE_HPP__
 
 #include <string>
+#include <map>
 #include <fstream>
 #include "object.hpp"
 

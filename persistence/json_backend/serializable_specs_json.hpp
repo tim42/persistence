@@ -531,8 +531,9 @@ namespace neam
               return false;
 
             // I know that this is unforgivable, but I want to have an object without dynamic allocation and without calling its constructor
-            int8_t temp_memory[sizeof(typename Caller::kv_instance_t)];
-            typename Caller::kv_instance_t *temp_memory_ptr = reinterpret_cast<typename Caller::kv_instance_t *>(temp_memory);
+            using temp_memory_t = typename Caller::kv_instance_t;
+            int8_t temp_memory[sizeof(temp_memory_t)];
+            temp_memory_t *temp_memory_ptr = reinterpret_cast<temp_memory_t *>(temp_memory);
 
             size_t index = 0;
             if (memory[0] == '"' || internal::json::advance_next(memory, size, index))
@@ -546,8 +547,11 @@ namespace neam
                 if (!internal::json::get_element_end_index(memory, size, end_index, internal::json::types::string)) // the JSON is not well formatted
                   return false;
 
+                allocation_transaction temp_transaction;
+                allocation_transaction *transaction_ptr = (Caller::can_construct_inplace ? &transaction : &temp_transaction);
+
                 // get the key (must be a string)
-                if (!Caller::from_memory_single_key(transaction, ptr, temp_memory_ptr, memory + index, end_index - index))
+                if (!Caller::from_memory_single_key(*transaction_ptr, ptr, temp_memory_ptr, memory + index, end_index - index))
                   return false;
 
                 // skip the : token
@@ -562,12 +566,15 @@ namespace neam
                   return false;
 
                 // get the value
-                if (!Caller::from_memory_single_value(transaction, ptr, temp_memory_ptr, memory + index, end_index - index))
+                if (!Caller::from_memory_single_value(*transaction_ptr, ptr, temp_memory_ptr, memory + index, end_index - index))
                   return false;
                 index = end_index;
 
                 if (!Caller::from_memory_single_push_kv(transaction, ptr, temp_memory_ptr))
                   return false;
+
+                // call the destructor of the temporary memory
+                temp_transaction.rollback();
 
                 if (!internal::json::advance_next(memory, size, index, ','))
                   break; // can't do much more

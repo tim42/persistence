@@ -71,7 +71,7 @@ namespace neam
         /// \brief a simple function that goes through all the serialization process and returns a \e raw_data struct that holds (and have the ownership) of the serialized object
         /// \return an empty \e raw_data instance (data = nullptr and size = 0) when the process has failed
         template<typename Backend, typename Type, typename... Params>
-        static raw_data serialize(const Type &obj, Params &&... p)
+        static raw_data serialize(const Type &obj, Params... p)
         {
           raw_data rdt;
 
@@ -93,7 +93,7 @@ namespace neam
         /// \return nullptr when it has failed
         /// \note It's up to you to \b delete the returned object !!!
         template<typename Backend, typename Type, typename... Params>
-        static Type *deserialize(const raw_data &serialized_data, Params &&... p)
+        static Type *deserialize(const raw_data &serialized_data, Params... p)
         {
           cr::allocation_transaction transaction;
 
@@ -114,7 +114,7 @@ namespace neam
         /// \brief deserialize a class, uses an already existing object
         /// \return nullptr when it has failed, else return the pointer in \e ptr
         template<typename Backend, typename Type, typename... Params>
-        static Type *deserialize(const raw_data &serialized_data, Type *ptr, Params &&... p)
+        static Type *deserialize(const raw_data &serialized_data, Type *ptr, Params... p)
         {
           cr::allocation_transaction transaction;
 
@@ -168,7 +168,7 @@ namespace neam
             }
         };
 
-        /// \brief this serialize objects (like classes) properties per properties
+        /// \brief this serialize objects (like classes) property per property
         /// this generate meta-data used to generate code that will fill the object.
         /// \param OffsetTypeList is a list of \code typed_offset <type, offsetof(my_class, member)> \endcode that could be simplified with the macro \code NRP_TYPPED_OFFSET(my_class, member) \endcode
         /// \see constructible_serializable_object
@@ -268,6 +268,7 @@ namespace neam
             }
 
             using kv_instance_t = int;
+            static constexpr bool can_construct_inplace = true;
 
             template<typename... Params>
             static inline bool from_memory_single_key(cr::allocation_transaction &, Type *, void *pair, const char *k_memory, size_t k_size, Params && ...k_p)
@@ -399,7 +400,7 @@ namespace neam
             /// \param[out] ptr a pointer to the object (the one that the function will fill)
             /// \return true if successful
             template<typename... Params>
-            static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params &&... p)
+            static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params... p)
             {
               allocation_transaction temp_transaction;
               if (!serializable_object<Backend, Type, OffsetTypeList...>::from_memory(temp_transaction, memory, size, ptr, std::forward<Params>(p)...))
@@ -431,7 +432,7 @@ namespace neam
             /// \param[in] ptr a pointer to the object (the one that the function will serialize)
             /// \return true if successful
             template<typename... Params>
-            static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params &&... p)
+            static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params... p)
             {
               // simply forward to serializable_object as we don't have to do anything here.
               return serializable_object<Backend, Type, OffsetTypeList...>::to_memory(mem, size, ptr, std::forward<Params>(p)...);

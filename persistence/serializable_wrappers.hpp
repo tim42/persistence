@@ -34,7 +34,7 @@ namespace neam
   namespace cr
   {
     /// \brief add a magic number and check it
-    template<typename Type> class magic {};
+    template<typename Type, uint32_t Magic = 0x37701992> class magic {};
 
     /// \brief add a checksum and check it
     template<typename Type> class checksum {};
@@ -42,11 +42,11 @@ namespace neam
     /// \brief Xor the data
     template<typename Type, uint64_t Seed = 0xA1A598773F70B5DB> class xor_data {};
 
-    template<typename Type>
-    class persistence::serializable<persistence_backend::neam, magic<Type>>
+    template<typename Type, uint32_t Magic>
+    class persistence::serializable<persistence_backend::neam, magic<Type, Magic>>
     {
       private:
-        constexpr static uint32_t magic_number = 0x07081992;
+        constexpr static uint32_t magic_number = Magic;
 
       public:
         /// \brief deserialize the object
@@ -54,7 +54,8 @@ namespace neam
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-        static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr)
+        template<typename... Params>
+        static bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, const Type *ptr, Params... p)
         {
           if (size < sizeof(uint32_t))
             return false;
@@ -63,15 +64,22 @@ namespace neam
           if (magic != magic_number)
             return false;
 
-          return serializable<persistence_backend::neam, Type>::from_memory(transaction, memory + sizeof(uint32_t), size - sizeof(uint32_t), const_cast<Type *>(ptr));
+          return serializable<persistence_backend::neam, Type>::from_memory(transaction, memory + sizeof(uint32_t), size - sizeof(uint32_t), const_cast<Type *>(ptr), std::forward<Params>(p)...);
+        }
+
+        template<typename... Params>
+        static bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, magic<Type, Magic> *ptr, Params... p)
+        {
+          return from_memory(transaction, memory, size, reinterpret_cast<Type *>(ptr), std::forward<Params>(p)...);
         }
 
         /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] mem the serialized object (don't forget to \b free that memory !!!)
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
-        static bool to_memory(memory_allocator &mem, size_t &size, Type *ptr)
+        template<typename... Params>
+        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params... p)
         {
           size_t o_size;
 
@@ -79,13 +87,19 @@ namespace neam
           if (!magic)
             return false;
 
-          if (serializable<persistence_backend::neam, Type>::to_memory(mem, o_size, const_cast<Type *>(ptr)))
+          if (serializable<persistence_backend::neam, Type>::to_memory(mem, o_size, const_cast<Type *>(ptr), std::forward<Params>(p)...))
           {
             size = o_size + sizeof(uint32_t);
             *magic = magic_number;
             return true;
           }
           return false;
+        }
+
+        template<typename... Params>
+        static bool to_memory(memory_allocator &mem, size_t &size, const magic<Type, Magic> *ptr, Params... p)
+        {
+          return to_memory(mem, size, reinterpret_cast<const Type *>(ptr), std::forward<Params>(p)...);
         }
     };
 
@@ -131,7 +145,7 @@ namespace neam
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
         template<typename... Params>
-        static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params && ... p)
+        static bool from_memory(cr::allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params... p)
         {
           if (size < sizeof(uint64_t))
             return false;
@@ -144,13 +158,19 @@ namespace neam
           return serializable<Backend, Type>::from_memory(transaction, memory + sizeof(uint64_t), size - sizeof(uint64_t), (ptr), std::forward<Params>(p)...);
         }
 
+        template<typename... Params>
+        static bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, checksum<Type> *ptr, Params... p)
+        {
+          return from_memory(transaction, memory, size, reinterpret_cast<Type *>(ptr), std::forward<Params>(p)...);
+        }
+
         /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] mem the serialized object (don't forget to \b free that memory !!!)
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
         template<typename... Params>
-        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params && ... p)
+        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params ... p)
         {
           size_t o_size = 0;
 
@@ -169,6 +189,12 @@ namespace neam
             return true;
           }
           return false;
+        }
+
+        template<typename... Params>
+        static bool to_memory(memory_allocator &mem, size_t &size, const checksum<Type> *ptr, Params... p)
+        {
+          return to_memory(mem, size, reinterpret_cast<const Type *>(ptr), std::forward<Params>(p)...);
         }
     };
 
@@ -206,13 +232,20 @@ namespace neam
         }
 
       public:
+
+        template<typename... Params>
+        static bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, xor_data<Type, Seed> *ptr, Params... p)
+        {
+          return from_memory(transaction, memory, size, reinterpret_cast<Type *>(ptr), std::forward<Params>(p)...);
+        }
+
         /// \brief deserialize the object
         /// \param[in] memory the serialized object
         /// \param[in] size the size of the memory area
         /// \param[out] ptr a pointer to the object (the one that the function will fill)
         /// \return true if successful
-//         template<typename... Params>
-        static bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, Type *ptr/*, Params && ... p*/)
+        template<typename... Params>
+        static bool from_memory(allocation_transaction &transaction, const char *memory, size_t size, Type *ptr, Params... p)
         {
           const char *xored_memory;
           if (!(xored_memory = xor_all_those_bytes(memory, size)))
@@ -221,7 +254,7 @@ namespace neam
           bool res;
           try
           {
-            res = serializable<persistence_backend::neam, Type>::from_memory(transaction, xored_memory, size, ptr/*, std::forward<Params>(p)...*/);
+            res = serializable<persistence_backend::neam, Type>::from_memory(transaction, xored_memory, size, ptr, std::forward<Params>(p)...);
           } catch (...)
           {
             delete xored_memory;
@@ -232,12 +265,12 @@ namespace neam
         }
 
         /// \brief serialize the object
-        /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
+        /// \param[out] mem the serialized object (don't forget to \b free that memory !!!)
         /// \param[out] size the size of the memory area
         /// \param[in] ptr a pointer to the object (the one that the function will serialize)
         /// \return true if successful
         template<typename... Params>
-        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params && ... p)
+        static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, Params... p)
         {
           size_t o_size = 0;
           size_t index = mem.size();
@@ -250,6 +283,13 @@ namespace neam
             return true;
           }
           return false;
+        }
+
+
+        template<typename... Params>
+        static bool to_memory(memory_allocator &mem, size_t &size, const xor_data<Type, Seed> *ptr, Params... p)
+        {
+          return to_memory(mem, size, reinterpret_cast<const Type *>(ptr), std::forward<Params>(p)...);
         }
     };
   } // namespace cr

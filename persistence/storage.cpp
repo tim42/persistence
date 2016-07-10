@@ -1,5 +1,7 @@
 
 #include "storage.hpp"
+#include "stl/map.hpp"
+#include "stl/string.hpp"
 
 neam::cr::storage::storage(const std::string &_filename) : mapped_file(nullptr), filename(_filename)
 {
