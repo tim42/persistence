@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include <persistence/persistence.hpp>
+#include <persistence/stl/vector.hpp>
 
 //
 // NOTE: You should look to the basic and simple samples before !!
@@ -77,7 +78,11 @@ namespace neam
 
 
       NCRP_TYPED_OFFSET(my_class, s_double),
-      NCRP_TYPED_OFFSET(my_class, s_vector)
+
+      // instead of having the data of the member written "as-is", you can put a wrapper around it
+      // (here, it it will xor the output with a seedable PRNG)
+      // This can have a bad effect on some backends and should only be used with the neam one
+      NCRP_OFFSET(neam::cr::xor_data<std::vector<my_struct>>, my_class, s_vector)
     > {};
 
     // Here we create a special metadata for the verbose backend that will serialize

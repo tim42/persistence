@@ -4,6 +4,8 @@
 #include <map>
 
 #include <persistence/persistence.hpp>
+#include <persistence/stl/vector.hpp>
+
 #include <persistence/tools/uninitialized.hpp>
 
 //

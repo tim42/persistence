@@ -4,6 +4,8 @@
 #include <fstream>
 
 #include <persistence/persistence.hpp>
+#include <persistence/stl/vector.hpp>
+
 #include <persistence/tools/uninitialized.hpp>
 
 /// \brief a class we want to be serialized / deserialized

@@ -9,6 +9,9 @@
 #include <chrono>
 
 #include <persistence/persistence.hpp>
+#include <persistence/stl/vector.hpp>
+#include <persistence/stl/map.hpp>
+#include <persistence/stl/string.hpp>
 
 /// \brief a class we want to be serialized / deserialized
 struct my_struct
