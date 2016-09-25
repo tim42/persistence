@@ -145,31 +145,7 @@ namespace neam
         class serializable
         {
           public:
-            /// \brief The default initializer, if nothing is provided to initialize this field in the JSON
-            static inline bool default_initializer(cr::allocation_transaction &, Type *)
-            {
-              return false;
-            }
-
-            /// \brief deserialize the object
-            /// \param[in] memory the serialized object
-            /// \param[in] size the size of the memory area
-            /// \param[out] ptr a pointer to the object (the one that the function will fill)
-            /// \return true if successful
-            static bool from_memory(cr::allocation_transaction &, const char *, size_t , Type *)
-            {
-              return false;
-            }
-
-            /// \brief serialize the object
-            /// \param[out] memory the serialized object (don't forget to \b free that memory !!!)
-            /// \param[out] size the size of the memory area
-            /// \param[in] ptr a pointer to the object (the one that the function will serialize)
-            /// \return true if successful
-            static bool to_memory(memory_allocator &, size_t &, const Type *)
-            {
-              return false;
-            }
+	  static_assert(sizeof(Type) + 1 != 0, "Missing metadata for Type. (did you forget to include STL files ?)");
         };
 
         /// \brief this serialize objects (like classes) property per property
