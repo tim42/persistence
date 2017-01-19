@@ -157,11 +157,11 @@ namespace neam
 
     template<> class persistence::serializable<persistence_backend::neam, float> : public persistence::serializable<persistence_backend::neam, float, internal::numeric> {};
     template<> class persistence::serializable<persistence_backend::neam, double> : public persistence::serializable<persistence_backend::neam, double, internal::numeric> {};
-#ifdef _MSC_VER
+
     template<> class persistence::serializable<persistence_backend::neam, unsigned long> : public persistence::serializable<persistence_backend::neam, unsigned long, internal::numeric> {};
     template<> class persistence::serializable<persistence_backend::neam, long> : public persistence::serializable<persistence_backend::neam, long, internal::numeric> {};
-#endif
-  	template<> class persistence::serializable<persistence_backend::neam, bool> : public persistence::serializable<persistence_backend::neam, int8_t, internal::numeric> {};
+
+    template<> class persistence::serializable<persistence_backend::neam, bool> : public persistence::serializable<persistence_backend::neam, int8_t, internal::numeric> {};
 
 
     template<>
