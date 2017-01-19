@@ -197,7 +197,7 @@ namespace neam
 
               template<typename... Params>
               static inline bool to_memory_single_value(memory_allocator &mem, size_t &size, const Type *ptr, Params && ... p)
-              {
+			  {
                 return persistence::serializable<Backend, type_t>::to_memory(mem, size, reinterpret_cast<const type_t *>(reinterpret_cast<const uint8_t *>(ptr) + OffsetType::offset), std::forward<Params>(p)...);
               }
             };
@@ -430,9 +430,14 @@ namespace neam
           using type = Type;
           using object = Object;
           constexpr static size_t offset = Offset;
+#ifndef _MSC_VER
           constexpr static const char *name = Name;
-          constexpr static bool absolute_offset = AbsoluteOffset;
           constexpr static size_t name_len = neam::ct::strlen(Name);
+#else
+          static const char *const name;
+          static const size_t name_len;
+#endif
+          constexpr static bool absolute_offset = AbsoluteOffset;
         };
 
 // NOTE: GCC issues a warning for offsetof() usage on some objects (but still, the code works).
@@ -481,8 +486,11 @@ namespace neam
 
 /// \brief declare a variable that will hold the name of the field
 /// \note be careful with the namespaces !
+#ifndef _MSC_VER
 #define NCRP_DECLARE_NAME(class, name)                          namespace names{namespace class{ constexpr neam::string_t name __attribute__((used)) = #name; }}
-
+#else
+#define NCRP_DECLARE_NAME(xclass, name)                         namespace names{namespace xclass { extern const char name[] = #name; }}
+#endif
 /// \brief like NCRP_TYPED_OFFSET, but surround the computed type with a wrapper (like \e checksum or \e magic)
 #define NCRP_WRAPPED_TYPED_OFFSET(class, member, wrapper, ...)  neam::cr::persistence::typed_offset<wrapper<decltype(class::member), ##__VA_ARGS__>, class, N__OFFSETOF(class, member)>
 
@@ -492,10 +500,16 @@ namespace neam
         ~persistence() = delete;
     }; // class persistence
 
-    // TODO: find a better alternative to this...
-    template<typename Type, typename Object, size_t Offset, const char *Name, bool AbsoluteOffset>
+#ifndef _MSC_VER
+  	template<typename Type, typename Object, size_t Offset, const char *Name, bool AbsoluteOffset>
     constexpr const char *persistence::typed_offset<Type, Object, Offset, Name, AbsoluteOffset>::name;
+#else
+    template<typename Type, typename Object, size_t Offset, const char *Name, bool AbsoluteOffset>
+    const size_t persistence::typed_offset<Type, Object, Offset, Name, AbsoluteOffset>::name_len = Name;
 
+    template<typename Type, typename Object, size_t Offset, const char *Name, bool AbsoluteOffset>
+    const size_t persistence::typed_offset<Type, Object, Offset, Name, AbsoluteOffset>::name = strlen(Name);
+#endif
   } // namespace cr
 } // namespace neam
 

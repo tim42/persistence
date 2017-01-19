@@ -34,6 +34,7 @@
 #include <string>
 #include <cstdlib>
 #include <cstdint>
+#include <cctype>
 
 // This file is mostly serialization oriented
 //  With a bit of deserialization
@@ -102,7 +103,7 @@ namespace neam
                     return res;
                   char data[5] = {res[i], res[i + 1], res[1 + 2], res[1 + 3], 0};
                   char *_u = data;
-                  uint16_t t = strtoul(data, &_u, 16);
+                  uint16_t t = static_cast<uint16_t>(strtoul(data, &_u, 16));
                   if (t & 0xFF00)
                     res += char(t >> 8);
                   res += char(t & 0xFF);

@@ -157,9 +157,11 @@ namespace neam
 
     template<> class persistence::serializable<persistence_backend::neam, float> : public persistence::serializable<persistence_backend::neam, float, internal::numeric> {};
     template<> class persistence::serializable<persistence_backend::neam, double> : public persistence::serializable<persistence_backend::neam, double, internal::numeric> {};
-    // TODO:
-    // template<> class persistence::serializable<persistence_backend::neam, long double> : public persistence::serializable<persistence_backend::neam, long double, internal::numeric> {};
-    template<> class persistence::serializable<persistence_backend::neam, bool> : public persistence::serializable<persistence_backend::neam, int8_t, internal::numeric> {};
+#ifdef _MSC_VER
+    template<> class persistence::serializable<persistence_backend::neam, unsigned long> : public persistence::serializable<persistence_backend::neam, unsigned long, internal::numeric> {};
+    template<> class persistence::serializable<persistence_backend::neam, long> : public persistence::serializable<persistence_backend::neam, long, internal::numeric> {};
+#endif
+  	template<> class persistence::serializable<persistence_backend::neam, bool> : public persistence::serializable<persistence_backend::neam, int8_t, internal::numeric> {};
 
 
     template<>
@@ -195,7 +197,7 @@ namespace neam
           char *memory = reinterpret_cast<char *>(mem.allocate(ptr->size + sizeof(uint32_t)));
           if (!memory)
             return false;
-          *reinterpret_cast<uint32_t *>(memory) = ptr->size;
+          *reinterpret_cast<uint32_t *>(memory) = uint32_t(ptr->size);
           memcpy(memory + sizeof(uint32_t), ptr->data, ptr->size);
           size = ptr->size + sizeof(uint32_t);
           return true;
