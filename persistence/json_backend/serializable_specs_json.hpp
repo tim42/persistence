@@ -32,6 +32,8 @@
 
 #include <type_traits>
 #include <string>
+#include <sstream>
+#include <iomanip>
 #include "../tools/array_wrapper.hpp"
 #include "../tools/demangle.hpp"
 #include "../object.hpp" // for my IDE
@@ -176,7 +178,11 @@ namespace neam
         /// \return true if successful
         static bool to_memory(memory_allocator &mem, size_t &size, const Type *ptr, size_t = 0)
         {
-          return internal::json::_allocate_format_string(mem, size, 0, nullptr, std::to_string(*ptr));
+          std::ostringstream os;
+          if (std::is_floating_point<Type>::value && std::numeric_limits<Type>::max_digits10 > 0)
+            os << std::setprecision(std::numeric_limits<Type>::max_digits10);
+          os << ptr;
+          return internal::json::_allocate_format_string(mem, size, 0, nullptr, os.str());
         }
     };
 
