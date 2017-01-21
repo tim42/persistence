@@ -181,7 +181,7 @@ namespace neam
           std::ostringstream os;
           if (std::is_floating_point<Type>::value && std::numeric_limits<Type>::max_digits10 > 0)
             os << std::setprecision(std::numeric_limits<Type>::max_digits10);
-          os << ptr;
+          os << (*ptr);
           return internal::json::_allocate_format_string(mem, size, 0, nullptr, os.str());
         }
     };
