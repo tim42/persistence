@@ -432,7 +432,7 @@ namespace neam
           constexpr static size_t offset = Offset;
 #ifndef _MSC_VER
           constexpr static const char *name = Name;
-          constexpr static size_t name_len = neam::ct::strlen(Name);
+          constexpr static size_t name_len = (Name == nullptr ? 0 : neam::ct::strlen(Name));
 #else
           static const char *const name;
           static const size_t name_len;
