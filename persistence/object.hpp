@@ -505,10 +505,10 @@ namespace neam
     constexpr const char *persistence::typed_offset<Type, Object, Offset, Name, AbsoluteOffset>::name;
 #else
     template<typename Type, typename Object, size_t Offset, const char *Name, bool AbsoluteOffset>
-    const size_t persistence::typed_offset<Type, Object, Offset, Name, AbsoluteOffset>::name_len = Name;
+    const char *const persistence::typed_offset<Type, Object, Offset, Name, AbsoluteOffset>::name = Name;
 
     template<typename Type, typename Object, size_t Offset, const char *Name, bool AbsoluteOffset>
-    const size_t persistence::typed_offset<Type, Object, Offset, Name, AbsoluteOffset>::name = strlen(Name);
+    const size_t persistence::typed_offset<Type, Object, Offset, Name, AbsoluteOffset>::name_len = strlen(Name);
 #endif
   } // namespace cr
 } // namespace neam
