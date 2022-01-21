@@ -1,6 +1,14 @@
 
 # neam/persistence
 
+---
+
+**IMPORTANT NOTE:**
+For the most part, persistence has been super-seeded by [tools/rle](https://github.com/tim42/tools/tree/master/rle) which is a bit more modern and does not rely on now-unsupported compiler behaviors.
+Moreover, tools/rle uses a generic concept of [structure metadata](tools/struct_metadata/struct_metadata.hpp) that can be re-used by different utilities.
+
+---
+
 
 **neam/persistence** is a small utility library that serialize and de-serialize C++ objects.
 It provides multiple backends like a JSON serializer/deserializer, a verbose serializer or a binary serializer/deserializer.
